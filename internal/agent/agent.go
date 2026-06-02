@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/brittonhayes/harness/internal/llm"
-	"github.com/brittonhayes/harness/internal/permission"
-	"github.com/brittonhayes/harness/internal/tool"
+	"github.com/brittonhayes/vala/internal/llm"
+	"github.com/brittonhayes/vala/internal/permission"
+	"github.com/brittonhayes/vala/internal/tool"
 )
 
 // Events lets a caller (REPL, one-shot runner) observe the loop as it runs.

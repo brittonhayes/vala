@@ -3,7 +3,7 @@ package reference
 import (
 	"testing"
 
-	"github.com/brittonhayes/harness/internal/detect"
+	"github.com/brittonhayes/vala/internal/detect"
 )
 
 // TestReferencesValid guards the gold standard: every embedded reference must

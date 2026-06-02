@@ -1,4 +1,4 @@
-module github.com/brittonhayes/harness
+module github.com/brittonhayes/vala
 
 go 1.25.0
 

@@ -9,7 +9,7 @@ description: |
 references:
   - https://attack.mitre.org/techniques/T1562/008/
   - https://docs.aws.amazon.com/config/latest/developerguide/stop-start-recorder.html
-author: Harness
+author: Vala
 date: 2024-06-09
 logsource:
   product: aws

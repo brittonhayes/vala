@@ -1,6 +1,6 @@
-// Package config loads harness settings, layering (lowest priority first):
-// built-in defaults, the user config (~/.config/harness/config.json), the
-// project config (./.harness.json), and finally environment variables.
+// Package config loads vala settings, layering (lowest priority first):
+// built-in defaults, the user config (~/.config/vala/config.json), the
+// project config (./.vala.json), and finally environment variables.
 package config
 
 import (
@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 )
 
-// Config holds runtime settings for the harness.
+// Config holds runtime settings for vala.
 type Config struct {
 	// Model is the Anthropic model ID used for the agent loop.
 	Model string `json:"model"`
@@ -45,19 +45,19 @@ func Load(cwd string) (Config, error) {
 	cfg := Default()
 
 	if home, err := os.UserConfigDir(); err == nil {
-		_ = mergeFile(&cfg, filepath.Join(home, "harness", "config.json"))
+		_ = mergeFile(&cfg, filepath.Join(home, "vala", "config.json"))
 	}
-	if err := mergeFile(&cfg, filepath.Join(cwd, ".harness.json")); err != nil {
+	if err := mergeFile(&cfg, filepath.Join(cwd, ".vala.json")); err != nil {
 		return cfg, err
 	}
 
 	if v := os.Getenv("ANTHROPIC_API_KEY"); v != "" {
 		cfg.APIKey = v
 	}
-	if v := os.Getenv("HARNESS_MODEL"); v != "" {
+	if v := os.Getenv("VALA_MODEL"); v != "" {
 		cfg.Model = v
 	}
-	if v := os.Getenv("HARNESS_PERMISSION"); v != "" {
+	if v := os.Getenv("VALA_PERMISSION"); v != "" {
 		cfg.Permission = v
 	}
 	return cfg, nil

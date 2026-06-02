@@ -1,6 +1,6 @@
 package tools
 
-import "github.com/brittonhayes/harness/internal/tool"
+import "github.com/brittonhayes/vala/internal/tool"
 
 // Default builds the tool registry anchored at the given working directory:
 // shell + file operations, native Sigma detection validation, and the Notion

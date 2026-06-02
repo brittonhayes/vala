@@ -14,7 +14,7 @@ import (
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
-	"github.com/brittonhayes/harness/internal/tool"
+	"github.com/brittonhayes/vala/internal/tool"
 )
 
 //go:embed grep.md

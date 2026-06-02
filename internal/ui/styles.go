@@ -26,7 +26,7 @@ type Styles struct {
 	User         lipgloss.Style
 }
 
-// DefaultStyles returns the harness color palette.
+// DefaultStyles returns the vala color palette.
 func DefaultStyles() Styles {
 	return Styles{
 		Banner:       lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7D56F4")),

@@ -3,8 +3,8 @@ package ui
 import (
 	"testing"
 
-	"github.com/brittonhayes/harness/internal/permission"
-	"github.com/brittonhayes/harness/internal/session"
+	"github.com/brittonhayes/vala/internal/permission"
+	"github.com/brittonhayes/vala/internal/session"
 )
 
 // newTestModel builds a chatModel wired to a real session and gate but no agent,

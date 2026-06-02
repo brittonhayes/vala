@@ -12,9 +12,9 @@ var Version = "dev"
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
-	Short: "Print the harness version",
+	Short: "Print the vala version",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("harness", resolveVersion())
+		fmt.Println("vala", resolveVersion())
 	},
 }
 

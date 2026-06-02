@@ -1,4 +1,4 @@
-Run a detection rule's inline `tests:` through the harness's built-in Sigma
+Run a detection rule's inline `tests:` through vala's built-in Sigma
 evaluation engine. Each test case is a sample event the engine matches against
 the rule's `detection`/`condition`; the case's `match` field is the expected
 outcome. This runs entirely in-process — no SIEM, no network.

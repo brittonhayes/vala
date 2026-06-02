@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/brittonhayes/harness/internal/detect"
-	"github.com/brittonhayes/harness/internal/tool"
+	"github.com/brittonhayes/vala/internal/detect"
+	"github.com/brittonhayes/vala/internal/tool"
 )
 
 //go:embed test_detection.md

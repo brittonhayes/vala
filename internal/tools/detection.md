@@ -1,5 +1,5 @@
 Validate Sigma detection rules against the official Sigma schema. This runs
-entirely inside the harness — no external CLI, no network — so use it freely
+entirely inside vala — no external CLI, no network — so use it freely
 after authoring or editing any rule.
 
 Validate a single file, or a whole directory:

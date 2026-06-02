@@ -5,9 +5,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/brittonhayes/harness/internal/detect"
-	"github.com/brittonhayes/harness/internal/sigma"
-	"github.com/brittonhayes/harness/internal/tool"
+	"github.com/brittonhayes/vala/internal/detect"
+	"github.com/brittonhayes/vala/internal/sigma"
+	"github.com/brittonhayes/vala/internal/tool"
 )
 
 // editDetection loads the Sigma rule at path, applies mutate to a comment- and

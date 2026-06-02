@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/brittonhayes/harness/internal/sigma"
-	"github.com/brittonhayes/harness/internal/tool"
+	"github.com/brittonhayes/vala/internal/sigma"
+	"github.com/brittonhayes/vala/internal/tool"
 )
 
 //go:embed manage_detection_tests.md

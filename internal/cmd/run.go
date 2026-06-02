@@ -5,9 +5,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/brittonhayes/harness/internal/agent"
-	"github.com/brittonhayes/harness/internal/permission"
-	"github.com/brittonhayes/harness/internal/session"
+	"github.com/brittonhayes/vala/internal/agent"
+	"github.com/brittonhayes/vala/internal/permission"
+	"github.com/brittonhayes/vala/internal/session"
 	"github.com/spf13/cobra"
 )
 

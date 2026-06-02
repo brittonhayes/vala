@@ -79,7 +79,7 @@ func (s *Session) flush() {
 // DefaultDir returns the standard transcript directory for the host.
 func DefaultDir() string {
 	if dir, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(dir, ".local", "share", "harness", "sessions")
+		return filepath.Join(dir, ".local", "share", "vala", "sessions")
 	}
 	return ""
 }

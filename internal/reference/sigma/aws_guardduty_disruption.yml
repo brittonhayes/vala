@@ -8,7 +8,7 @@ description: |
 references:
   - https://attack.mitre.org/techniques/T1562/001/
   - https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_suspend-disable.html
-author: Harness
+author: Vala
 date: 2024-06-09
 logsource:
   product: aws

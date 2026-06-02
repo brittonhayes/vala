@@ -1,6 +1,6 @@
-# Compiled binary (built with `go build -o harness ./cmd/harness`)
-/harness
-harness.exe
+# Compiled binary (built with `go build -o vala ./cmd/vala`)
+/vala
+vala.exe
 
 # Build / release output
 /dist/
@@ -17,6 +17,6 @@ coverage.txt
 *.swp
 .DS_Store
 
-# Local harness config & session transcripts (if ever placed in-tree)
-.harness.json
+# Local vala config & session transcripts (if ever placed in-tree)
+.vala.json
 /sessions/

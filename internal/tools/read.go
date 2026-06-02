@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/brittonhayes/harness/internal/tool"
+	"github.com/brittonhayes/vala/internal/tool"
 )
 
 //go:embed read.md

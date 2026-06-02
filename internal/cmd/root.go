@@ -1,18 +1,18 @@
-// Package cmd wires the harness CLI together with cobra.
+// Package cmd wires the vala CLI together with cobra.
 package cmd
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/brittonhayes/harness/internal/agent"
-	"github.com/brittonhayes/harness/internal/config"
-	"github.com/brittonhayes/harness/internal/llm"
-	"github.com/brittonhayes/harness/internal/permission"
-	"github.com/brittonhayes/harness/internal/session"
-	"github.com/brittonhayes/harness/internal/tool"
-	"github.com/brittonhayes/harness/internal/tools"
-	"github.com/brittonhayes/harness/internal/ui"
+	"github.com/brittonhayes/vala/internal/agent"
+	"github.com/brittonhayes/vala/internal/config"
+	"github.com/brittonhayes/vala/internal/llm"
+	"github.com/brittonhayes/vala/internal/permission"
+	"github.com/brittonhayes/vala/internal/session"
+	"github.com/brittonhayes/vala/internal/tool"
+	"github.com/brittonhayes/vala/internal/tools"
+	"github.com/brittonhayes/vala/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -24,15 +24,15 @@ var (
 
 // rootCmd starts the interactive REPL by default.
 var rootCmd = &cobra.Command{
-	Use:   "harness",
+	Use:   "vala",
 	Short: "Agentic security detection & response harness",
-	Long: `Harness is an agentic harness for security detection & response work.
+	Long: `Vala is an agentic harness for security detection & response work.
 
 It drives an LLM agent that can investigate, author and validate Sigma
 detection rules, run shell/file tools, and document findings in Notion via the
 ntn CLI.
 
-Run with no arguments to start an interactive session, or use "harness run"
+Run with no arguments to start an interactive session, or use "vala run"
 for a single non-interactive task.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,

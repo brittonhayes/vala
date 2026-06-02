@@ -1,5 +1,5 @@
-// Package llm is a thin wrapper over the Anthropic Go SDK so the rest of the
-// harness depends on a small, stable surface rather than the full client.
+// Package llm is a thin wrapper over the Anthropic Go SDK so the rest of
+// vala depends on a small, stable surface rather than the full client.
 package llm
 
 import (
@@ -8,7 +8,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
-	"github.com/brittonhayes/harness/internal/config"
+	"github.com/brittonhayes/vala/internal/config"
 )
 
 // Client talks to the Anthropic Messages API with a fixed model and token cap.

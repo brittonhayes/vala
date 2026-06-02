@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/brittonhayes/harness/internal/reference"
-	"github.com/brittonhayes/harness/internal/tool"
+	"github.com/brittonhayes/vala/internal/reference"
+	"github.com/brittonhayes/vala/internal/tool"
 )
 
 //go:embed reference.md

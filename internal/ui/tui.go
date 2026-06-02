@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/brittonhayes/harness/internal/session"
+	"github.com/brittonhayes/vala/internal/session"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
@@ -69,7 +69,7 @@ type chatModel struct {
 
 func newChatModel(r *REPL) chatModel {
 	ta := textarea.New()
-	ta.Placeholder = "Ask harness to investigate, write a detection, or run a command…"
+	ta.Placeholder = "Ask vala to investigate, write a detection, or run a command…"
 	ta.Prompt = "› "
 	ta.ShowLineNumbers = false
 	ta.CharLimit = 0
@@ -309,7 +309,7 @@ func (m *chatModel) answerPerm(allow, always bool) {
 
 func (m chatModel) View() string {
 	if !m.ready {
-		return "starting harness…"
+		return "starting vala…"
 	}
 	box := m.styles.InputBox
 	if m.running {
@@ -361,7 +361,7 @@ func (m chatModel) footer() string {
 // banner is the curated session header, rendered as the first transcript block.
 func (m chatModel) banner() string {
 	var b strings.Builder
-	b.WriteString("  " + m.styles.BannerTag.Render("harness") + "  " +
+	b.WriteString("  " + m.styles.BannerTag.Render("vala") + "  " +
 		m.styles.Hint.Render("security detection & response · "+m.repl.Model))
 	if p := m.repl.Session.Path(); p != "" {
 		b.WriteString("\n  " + m.styles.Hint.Render("transcript · "+p))

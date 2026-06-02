@@ -1,8 +1,8 @@
-# harness
+# vala
 
 An agentic harness for **security detection & response (D&R)** engineering.
 
-`harness` drives an LLM agent (Anthropic Claude) that investigates suspicious
+`vala` drives an LLM agent (Anthropic Claude) that investigates suspicious
 activity, authors and validates [Sigma](https://sigmahq.io) detection rules,
 runs shell/file tools, and documents its work in Notion via the `ntn` CLI. It
 ships as a single static Go binary with **no external detection toolchain** —
@@ -22,16 +22,16 @@ runbook.
 ## Install
 
 ```sh
-go install github.com/brittonhayes/harness/cmd/harness@latest
+go install github.com/brittonhayes/vala/cmd/vala@latest
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 Or build from source:
 
 ```sh
-git clone https://github.com/brittonhayes/harness
-cd harness
-go build -o harness ./cmd/harness
+git clone https://github.com/brittonhayes/vala
+cd vala
+go build -o vala ./cmd/vala
 ```
 
 ## Usage
@@ -39,14 +39,14 @@ go build -o harness ./cmd/harness
 Interactive session (REPL):
 
 ```sh
-harness
+vala
 ```
 
 One-shot, non-interactive:
 
 ```sh
-harness run "validate and test every rule in my detections directory, and report failures"
-harness run --yes "author a Sigma rule for an attacker disabling GuardDuty: \
+vala run "validate and test every rule in my detections directory, and report failures"
+vala run --yes "author a Sigma rule for an attacker disabling GuardDuty: \
   study the reference rules first, add a runbook and two tests, then validate it"
 ```
 
@@ -96,16 +96,16 @@ report only what changed plus the validation status — never the whole file.
 
 ## Detections
 
-Detection rules are [Sigma](https://sigmahq.io) YAML files. **harness ships no
+Detection rules are [Sigma](https://sigmahq.io) YAML files. **vala ships no
 detections of its own** — you keep your rules wherever you already store them
-and point the harness at that directory with `detections_dir` (default
+and point vala at that directory with `detections_dir` (default
 `detections`, relative to the working directory). Sigma is the vendor-neutral
 detection-as-code standard; rules convert to many SIEM backends (and platforms
 like [scanner.dev](https://scanner.dev) can ingest Sigma directly), so you write
 once and stay portable.
 
 A rule requires at least `title`, `logsource`, and `detection` (with a
-`condition`). Harness rules also model two optional, schema-valid custom fields:
+`condition`). Vala rules also model two optional, schema-valid custom fields:
 
 - **`runbook:`** — inline response guidance (`triage`, `investigate`, `contain`,
   `escalate`, `references`) so a detection is *respondable* from the rule alone.
@@ -134,7 +134,7 @@ See the embedded gold-standard exemplars under
 Validate and test your whole detections directory at once:
 
 ```sh
-harness run "validate and test every rule in my detections directory"
+vala run "validate and test every rule in my detections directory"
 ```
 
 ### Built-in evaluation engine
@@ -152,7 +152,7 @@ Every **non-read-only** tool call is gated.
 
 - `ask` (default) — prompt the operator for each call. Answer `a` to allowlist a
   tool for the session.
-- `allow` — auto-approve (trusted, unattended runs; `harness run --yes`).
+- `allow` — auto-approve (trusted, unattended runs; `vala run --yes`).
 - `deny` — block all writes (investigation / dry-run only).
 
 Read-only tools (`read`, `ls`, `glob`, `grep`, `reference_detection`,
@@ -161,8 +161,8 @@ Read-only tools (`read`, `ls`, `glob`, `grep`, `reference_detection`,
 ## Configuration
 
 Settings layer (lowest priority first): built-in defaults →
-`~/.config/harness/config.json` → `./.harness.json` → environment variables
-(`ANTHROPIC_API_KEY`, `HARNESS_MODEL`, `HARNESS_PERMISSION`).
+`~/.config/vala/config.json` → `./.vala.json` → environment variables
+(`ANTHROPIC_API_KEY`, `VALA_MODEL`, `VALA_PERMISSION`).
 
 ```json
 {
@@ -175,7 +175,7 @@ Settings layer (lowest priority first): built-in defaults →
 }
 ```
 
-Session transcripts are written to `~/.local/share/harness/sessions/`.
+Session transcripts are written to `~/.local/share/vala/sessions/`.
 
 ## Roadmap
 
@@ -194,8 +194,8 @@ go vet ./...
 go test ./...
 
 # build / run the binary
-go build -o harness ./cmd/harness
-./harness version
+go build -o vala ./cmd/vala
+./vala version
 ```
 
 CI (GitHub Actions) runs build, vet, `go test -race`, and a `gofmt` check on

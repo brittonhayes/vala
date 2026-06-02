@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/brittonhayes/harness/internal/tool"
+	"github.com/brittonhayes/vala/internal/tool"
 )
 
 // run is a helper that marshals an input map and runs a tool.
