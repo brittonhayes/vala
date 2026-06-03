@@ -5,7 +5,7 @@ response action available on the host.
 
 Guidance:
 - To validate Sigma detection rules, use the `validate_detection` tool, NOT a
-  shelled-out CLI (scanner-cli, sigma-cli, yq, etc.).
+  shelled-out CLI (sigma-cli, yq, etc.).
 - Prefer the dedicated `read`, `write`, `edit`, `ls`, `glob`, and `grep` tools
   for file work; they are safer and clearer than shelling out.
 - Commands run via `sh -c` from the working directory. State (cwd, env) does

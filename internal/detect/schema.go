@@ -1,5 +1,5 @@
 // Package detect provides native, offline validation of Sigma detection rules
-// against the official Sigma JSON schema. No external CLI (scanner-cli, yq,
+// against the official Sigma JSON schema. No external CLI (sigma-cli, yq,
 // Python) is required — the schema is embedded and compiled into the binary.
 package detect
 

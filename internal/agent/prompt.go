@@ -6,7 +6,7 @@ import (
 )
 
 // SystemPrompt builds the agent's system prompt. The agent is framed as a
-// security detection & response engineer: it investigates, authors scanner.dev
+// security detection & response engineer: it investigates, authors Sigma
 // detection rules, and documents its work in Notion via the ntn tool.
 func SystemPrompt(workdir string, toolNames []string) string {
 	return fmt.Sprintf(`You are Vala, an autonomous security detection & response (D&R) engineer.
@@ -85,7 +85,7 @@ Workflow:
 
 ALWAYS validate a rule after writing or editing it using the
 "validate_detection" tool (it runs the official Sigma schema check inside
-vala — do NOT shell out to scanner-cli, sigma-cli, yq, or any external tool
+vala — do NOT shell out to sigma-cli, yq, or any external tool
 for validation). Fix every reported issue before considering the task done.
 
 # Documenting in Notion
