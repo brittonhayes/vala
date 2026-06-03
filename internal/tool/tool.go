@@ -105,9 +105,20 @@ func (r *Registry) All() []Tool {
 // ToAnthropic converts the registry into the tool parameters the Anthropic
 // Messages API expects.
 func (r *Registry) ToAnthropic() []anthropic.ToolUnionParam {
+	return r.ToAnthropicFiltered(nil)
+}
+
+// ToAnthropicFiltered is like ToAnthropic but only includes tools for which the
+// predicate returns true. A nil predicate includes every tool. The governed
+// loop uses this to expose only the tools permitted in the current phase, so
+// the model never even sees a write/destructive tool during investigation.
+func (r *Registry) ToAnthropicFiltered(include func(Tool) bool) []anthropic.ToolUnionParam {
 	tools := r.All()
 	out := make([]anthropic.ToolUnionParam, 0, len(tools))
 	for _, t := range tools {
+		if include != nil && !include(t) {
+			continue
+		}
 		s := t.Schema()
 		props := s.Properties
 		if props == nil {

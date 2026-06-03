@@ -1,0 +1,31 @@
+name: unapproved_action_blocked
+env: prod
+alert:
+  alert_id: A-1002
+  source: guardduty
+  severity: medium
+  raw: "Unusual API call from new region"
+steps:
+  - phase: evidence
+    tool: record_evidence
+    input:
+      claim: "API call from eu-west-3, first seen"
+      source: log_ref
+      pointer: "ct/2026-06-03/eu-west-3"
+      confidence: probable
+    capture_evidence_as: e1
+  # github.issue is not slack_notify; in prod it requires approval and the
+  # fixture grants none, so it must never execute.
+  - phase: propose
+    tool: propose_action
+    input:
+      tool: github_issue
+      input: { title: "Investigate eu-west-3 access" }
+      rationale: "Track the investigation"
+      evidence_ids: ["$e1"]
+  - phase: propose
+    tool: submit_for_approval
+    input: {}
+expect:
+  not_executed: [github_issue]   # requires approval, none given -> blocked
+  evidence_min: 1

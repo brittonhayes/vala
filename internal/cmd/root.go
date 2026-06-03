@@ -62,7 +62,7 @@ func Execute() {
 func init() {
 	rootCmd.PersistentFlags().StringVar(&flagModel, "model", "", "Anthropic model ID (overrides config)")
 	rootCmd.PersistentFlags().StringVar(&flagPermission, "permission", "", "permission mode: ask | allow | deny")
-	rootCmd.AddCommand(runCmd, versionCmd)
+	rootCmd.AddCommand(runCmd, respondCmd, harnessCmd, versionCmd)
 }
 
 // built bundles the constructed dependencies for a command.

@@ -28,6 +28,16 @@ jobs:
       - name: Test
         run: go test -race ./...
 
+      - name: Harness (adversarial regression suite)
+        run: go run ./cmd/vala harness --fixtures tests --out harness-report.json --baseline runner/baseline.json
+
+      - name: Upload harness report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-report
+          path: harness-report.json
+
       - name: Verify gofmt
         run: |
           unformatted=$(gofmt -l .)

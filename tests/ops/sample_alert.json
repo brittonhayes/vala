@@ -1,0 +1,6 @@
+{
+  "alert_id": "A-2026-0601",
+  "source": "cloudtrail",
+  "severity": "high",
+  "raw": "GuardDuty finding: CloudTrail logging was stopped (StopLogging) in the production account by IAM user 'bob' from 203.0.113.7."
+}

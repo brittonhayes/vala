@@ -10,8 +10,10 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/brittonhayes/vala/internal/governance"
 	"github.com/brittonhayes/vala/internal/llm"
 	"github.com/brittonhayes/vala/internal/permission"
+	"github.com/brittonhayes/vala/internal/policy"
 	"github.com/brittonhayes/vala/internal/tool"
 )
 
@@ -78,13 +80,73 @@ func New(client *llm.Client, registry *tool.Registry, gate *permission.Gate, wor
 
 // Run advances the conversation by one user turn. It appends the user input to
 // history, drives the tool-use loop to completion, and returns the updated
-// history so the caller can persist it and continue the session.
+// history so the caller can persist it and continue the session. This is the
+// legacy single-phase path used by the REPL and `vala run`; every tool is
+// exposed and gated only by permission.Gate.Allow.
 func (a *Agent) Run(ctx context.Context, history []anthropic.MessageParam, userInput string, ev Events) ([]anthropic.MessageParam, error) {
 	messages := append(history, anthropic.NewUserMessage(anthropic.NewTextBlock(userInput)))
-	tools := a.registry.ToAnthropic()
+	decide := func(block anthropic.ContentBlockUnion, summary string, t tool.Tool) (bool, string) {
+		return a.gate.Allow(block.Name, summary, t.ReadOnly()), "Operator denied permission to run this tool."
+	}
+	return a.loop(ctx, messages, a.system, a.registry.ToAnthropic(), decide, a.maxSteps, ev)
+}
 
-	for step := 0; step < a.maxSteps; step++ {
-		resp, err := a.llm.Complete(ctx, a.system, messages, tools)
+// Governor carries the per-run governance context for the phase-separated loop:
+// the current phase, the approval ledger, the policy set, and the environment.
+type Governor struct {
+	Phase  governance.Phase
+	Ledger *governance.Ledger
+	Policy *policy.Set
+	Env    string
+}
+
+// RunPhase drives the tool-use loop for a single governance phase. It exposes
+// only the tools permitted in gov.Phase and routes every tool call through the
+// phase-aware permission.Gate.Decide. The caller supplies the message history
+// and a phase-specific system prompt, and gets the updated history back.
+func (a *Agent) RunPhase(ctx context.Context, messages []anthropic.MessageParam, system string, gov Governor, maxSteps int, ev Events) ([]anthropic.MessageParam, error) {
+	pol := gov.Policy
+	if pol == nil {
+		pol = policy.Default()
+	}
+	tools := a.registry.ToAnthropicFiltered(func(t tool.Tool) bool {
+		return pol.ExposeInPhase(t.Name(), gov.Phase, gov.Env)
+	})
+	decide := func(block anthropic.ContentBlockUnion, summary string, t tool.Tool) (bool, string) {
+		class := pol.ClassOf(block.Name)
+		req := governance.Request{
+			Tool:     block.Name,
+			Summary:  summary,
+			ReadOnly: t.ReadOnly(),
+			Phase:    gov.Phase,
+			Class:    class,
+			Env:      gov.Env,
+		}
+		if class == governance.ClassActionExecute {
+			req.ActionID = governance.ActionID(block.Name, block.Input)
+		}
+		d := a.gate.Decide(req, gov.Ledger)
+		if d.Allow && req.ActionID != "" && gov.Ledger != nil {
+			// Enforce execute-at-most-once at the moment of allow.
+			gov.Ledger.MarkExecuted(req.ActionID)
+		}
+		return d.Allow, "Denied: " + d.Reason
+	}
+	if maxSteps <= 0 {
+		maxSteps = a.maxSteps
+	}
+	return a.loop(ctx, messages, system, tools, decide, maxSteps, ev)
+}
+
+// decideFunc decides whether a tool call may run, returning the denial message
+// to feed back to the model if not.
+type decideFunc func(block anthropic.ContentBlockUnion, summary string, t tool.Tool) (allow bool, denyMsg string)
+
+// loop is the shared tool-use loop body used by both the legacy and governed
+// paths. It runs until the model stops requesting tools or the step limit hits.
+func (a *Agent) loop(ctx context.Context, messages []anthropic.MessageParam, system string, tools []anthropic.ToolUnionParam, decide decideFunc, maxSteps int, ev Events) ([]anthropic.MessageParam, error) {
+	for step := 0; step < maxSteps; step++ {
+		resp, err := a.llm.Complete(ctx, system, messages, tools)
 		if err != nil {
 			return messages, fmt.Errorf("model request failed: %w", err)
 		}
@@ -98,7 +160,7 @@ func (a *Agent) Run(ctx context.Context, history []anthropic.MessageParam, userI
 					ev.assistantText(block.Text)
 				}
 			case "tool_use":
-				toolResults = append(toolResults, a.runToolUse(ctx, block, ev))
+				toolResults = append(toolResults, a.runToolUse(ctx, block, decide, ev))
 			}
 		}
 
@@ -108,12 +170,12 @@ func (a *Agent) Run(ctx context.Context, history []anthropic.MessageParam, userI
 		}
 		messages = append(messages, anthropic.NewUserMessage(toolResults...))
 	}
-	return messages, fmt.Errorf("reached step limit (%d) without completing", a.maxSteps)
+	return messages, fmt.Errorf("reached step limit (%d) without completing", maxSteps)
 }
 
-// runToolUse executes a single tool_use block through the permission gate and
-// returns the tool_result block to send back to the model.
-func (a *Agent) runToolUse(ctx context.Context, block anthropic.ContentBlockUnion, ev Events) anthropic.ContentBlockParamUnion {
+// runToolUse executes a single tool_use block through the supplied decision
+// function and returns the tool_result block to send back to the model.
+func (a *Agent) runToolUse(ctx context.Context, block anthropic.ContentBlockUnion, decide decideFunc, ev Events) anthropic.ContentBlockParamUnion {
 	summary := summarize(block.Name, block.Input)
 	ev.toolCall(block.Name, summary)
 
@@ -124,10 +186,10 @@ func (a *Agent) runToolUse(ctx context.Context, block anthropic.ContentBlockUnio
 		return anthropic.NewToolResultBlock(block.ID, msg, true)
 	}
 
-	if !a.gate.Allow(block.Name, summary, t.ReadOnly()) {
+	if allow, denyMsg := decide(block, summary, t); !allow {
 		ev.denied(block.Name, summary)
-		// StopTurn-style: tell the model the user declined so it can adapt.
-		return anthropic.NewToolResultBlock(block.ID, "Operator denied permission to run this tool.", true)
+		// StopTurn-style: tell the model why so it can adapt instead of looping.
+		return anthropic.NewToolResultBlock(block.ID, denyMsg, true)
 	}
 
 	res, err := t.Run(ctx, block.Input)

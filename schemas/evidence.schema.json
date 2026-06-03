@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/brittonhayes/vala/schemas/evidence.schema.json",
+  "title": "Evidence",
+  "description": "An immutable pointer backing a claim. Never free-form prose.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["claim", "kind", "pointer"],
+  "properties": {
+    "evidence_id": { "type": "string" },
+    "claim": { "type": "string", "description": "The specific factual claim this evidence supports." },
+    "kind": { "type": "string", "enum": ["query", "url", "file_hash", "log_ref"] },
+    "pointer": { "type": "string", "description": "The query ID/string, URL, hash, or log reference." },
+    "confidence": { "type": "string", "enum": ["confirmed", "probable", "hypothesis"] },
+    "collected_at": { "type": "string", "format": "date-time" }
+  }
+}

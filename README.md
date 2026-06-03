@@ -9,6 +9,14 @@ ships as a single static Go binary with **no external detection toolchain** —
 Sigma rules are validated *and unit-tested* natively and offline, inside the
 binary.
 
+It has two modes:
+
+- **Detection authoring** (`vala`, `vala run`) — study, author, validate, test,
+  and document Sigma rules.
+- **Incident response** (`vala respond`) — turn an alert into an auditable
+  **case** in Notion under a code-enforced governance loop, proven safe over
+  time by an adversarial regression harness (`vala harness`).
+
 The agent is framed as a detection engineer and given a focused toolset for the
 whole detection lifecycle: read the logs, study gold-standard exemplars, author
 a rule field by field, **prove it with embedded test events**, and write up the
@@ -50,7 +58,74 @@ vala run --yes "author a Sigma rule for an attacker disabling GuardDuty: \
   study the reference rules first, add a runbook and two tests, then validate it"
 ```
 
+Work an alert through the governed incident-response loop:
+
+```sh
+vala respond tests/ops/sample_alert.json
+```
+
+Replay the adversarial regression harness (no API key needed):
+
+```sh
+vala harness --fixtures tests
+```
+
 Flags: `--model <id>`, `--permission ask|allow|deny`.
+
+## Incident response (`vala respond`)
+
+`vala respond <alert.json>` drives an alert through a **phase-separated
+governance loop** where every phase exposes the agent a smaller set of tools:
+
+```
+plan ─► evidence ─► propose ─► approval ─► execute ─► report
+```
+
+- **evidence** — read-only investigation. The agent searches logs and records
+  every fact as an immutable **Evidence** pointer (a query ID, URL, or hash).
+- **propose** — the agent proposes explicit **Actions** (citing evidence). It
+  *cannot execute anything*: write/destructive tools are not even shown to it.
+- **approval** — a human or policy approves each action. An approval binds to a
+  single action by a deterministic `ActionID = hash(tool, canonical input)`.
+- **execute** — only approved actions run, each at most once (idempotent).
+- **report** — a narrative **case page** is written; every claim must cite an
+  Evidence row or be marked a hypothesis, or the page is rejected.
+
+This is enforced in **code**, not the prompt, at three points: the per-phase
+tool-exposure filter, the authoritative `permission.Gate.Decide` backstop, and
+the case-page evidence lint. Tool outputs are treated as untrusted data, so
+return-channel prompt injection cannot reach a write tool during investigation.
+
+The agent writes a structured **case brain** to Notion (via the `ntn` CLI):
+**Alerts**, **Cases**, **Evidence**, **Actions**, and **Runs** databases plus
+the narrative page. Without configured Notion database IDs the brain runs in
+local mode and prints the case page to stdout. v1 ships two integrations: a mock
+`log_search` evidence source and a gated `slack_notify` action.
+
+### Policy
+
+Governance is driven by editable YAML under [`policies/`](policies):
+
+- `tools.yaml` — classifies each tool (`read`, `case_write`, `control`,
+  `action_execute`) and lists per-environment (`dev`/`prod`) hard-deny rules.
+  Unknown tools default to the most restricted class, so they **fail closed**.
+- `decision.yaml` — which actions require approval, which auto-approve in `dev`,
+  which must cite evidence, and the forbidden-behavior list.
+
+### Harness (`vala harness`)
+
+The harness replays adversarial scenario fixtures (`tests/`) through the real
+governance machine in a deterministic recorded mode — **no LLM** — and scores
+each on five safety dimensions: **approval compliance, no scope creep,
+evidence-backed claims, injection resistance, schema validity**. It exits
+non-zero on any failure or on a regression versus a committed baseline, so a
+prompt or policy change that weakens behavior is caught in CI. The five
+threat-model classes (injection, scope creep, evidence-less claims, schema
+fuzzing, replay/idempotency) each have fixtures under `tests/`.
+
+```sh
+vala harness --fixtures tests --out report.json --baseline runner/baseline.json
+```
 
 ## How it works
 
@@ -89,6 +164,17 @@ detection work the loop is: **study → author → validate → test → documen
 | `set_detection_runbook` | no | Set the inline response `runbook:`. |
 | `manage_detection_tests` | no | Add/remove inline `tests:` cases. |
 | `ntn` | no | Drive the official Notion CLI for runbooks & incident docs. |
+
+Incident-response tools (used by `vala respond`, governed per phase):
+
+| Tool | Class | Purpose |
+|------|-------|---------|
+| `log_search` | read | Query logs for evidence (mock-capable). |
+| `record_evidence` | case_write | Append an immutable Evidence pointer. |
+| `propose_action` | control | Propose a write action for approval (citing evidence). |
+| `submit_for_approval` | control | End the proposal phase. |
+| `write_case_page` | case_write | Write the narrative page (evidence-linted). |
+| `slack_notify` | action_execute | The single gated write action in v1. |
 
 The field-editing tools all funnel through one load → mutate → validate → write
 pipeline: they change a single field, keep the file's comments intact, and
@@ -162,7 +248,8 @@ Read-only tools (`read`, `ls`, `glob`, `grep`, `reference_detection`,
 
 Settings layer (lowest priority first): built-in defaults →
 `~/.config/vala/config.json` → `./.vala.json` → environment variables
-(`ANTHROPIC_API_KEY`, `VALA_MODEL`, `VALA_PERMISSION`).
+(`ANTHROPIC_API_KEY`, `VALA_MODEL`, `VALA_PERMISSION`, `VALA_ENV`,
+`SLACK_WEBHOOK_URL`).
 
 ```json
 {
@@ -171,11 +258,18 @@ Settings layer (lowest priority first): built-in defaults →
   "permission": "ask",
   "allowlist": ["read", "ls", "glob", "grep"],
   "detections_dir": "detections",
-  "max_steps": 50
+  "max_steps": 50,
+  "env": "dev",
+  "notion": {
+    "alerts": "", "cases": "", "evidence": "",
+    "actions": "", "runs": "", "case_page_parent": ""
+  }
 }
 ```
 
-Session transcripts are written to `~/.local/share/vala/sessions/`.
+`env` selects the policy environment (`dev`/`prod`). Notion database IDs enable
+real Notion writes for `vala respond`; leave them empty to run the case brain in
+local mode. Session transcripts are written to `~/.local/share/vala/sessions/`.
 
 ## Roadmap
 
@@ -196,10 +290,14 @@ go test ./...
 # build / run the binary
 go build -o vala ./cmd/vala
 ./vala version
+
+# replay the adversarial harness
+go run ./cmd/vala harness --fixtures tests
 ```
 
-CI (GitHub Actions) runs build, vet, `go test -race`, and a `gofmt` check on
-every push and pull request.
+CI (GitHub Actions) runs build, vet, `go test -race`, the adversarial harness
+(diffed against `runner/baseline.json`), and a `gofmt` check on every push and
+pull request.
 
 ## License
 

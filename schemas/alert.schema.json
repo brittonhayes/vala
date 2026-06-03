@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/brittonhayes/vala/schemas/alert.schema.json",
+  "title": "Alert",
+  "description": "A normalized alert ingressing into the D&R system.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["alert_id", "source", "severity"],
+  "properties": {
+    "alert_id": { "type": "string", "description": "Stable identifier for the alert." },
+    "source": { "type": "string", "description": "Originating system, e.g. cloudtrail, guardduty." },
+    "severity": { "type": "string", "enum": ["info", "low", "medium", "high", "critical"] },
+    "received_at": { "type": "string", "format": "date-time" },
+    "raw": { "type": "string", "description": "Raw or normalized alert detail." },
+    "dedupe_key": { "type": "string" }
+  }
+}

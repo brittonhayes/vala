@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"github.com/brittonhayes/vala/internal/brain"
 )
 
 // Config holds runtime settings for vala.
@@ -24,8 +26,16 @@ type Config struct {
 	// MaxSteps bounds tool-use iterations per user turn (loop guard).
 	MaxSteps int `json:"max_steps"`
 
+	// Env selects the policy environment for governed runs: dev | prod.
+	Env string `json:"env"`
+	// Notion holds the database IDs the case brain writes to. Empty IDs mean
+	// the brain runs in local (in-memory) mode.
+	Notion brain.DBIDs `json:"notion"`
+
 	// APIKey is read from the environment, never persisted.
 	APIKey string `json:"-"`
+	// SlackWebhook is read from SLACK_WEBHOOK_URL, never persisted.
+	SlackWebhook string `json:"-"`
 }
 
 // Default returns the built-in configuration.
@@ -37,6 +47,7 @@ func Default() Config {
 		Allowlist:     nil,
 		DetectionsDir: "detections",
 		MaxSteps:      50,
+		Env:           "dev",
 	}
 }
 
@@ -59,6 +70,12 @@ func Load(cwd string) (Config, error) {
 	}
 	if v := os.Getenv("VALA_PERMISSION"); v != "" {
 		cfg.Permission = v
+	}
+	if v := os.Getenv("VALA_ENV"); v != "" {
+		cfg.Env = v
+	}
+	if v := os.Getenv("SLACK_WEBHOOK_URL"); v != "" {
+		cfg.SlackWebhook = v
 	}
 	return cfg, nil
 }

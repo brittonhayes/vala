@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/brittonhayes/vala/schemas/action.schema.json",
+  "title": "Action",
+  "description": "A proposed/approved/executed operation with an approval trail.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action_id", "type", "status"],
+  "properties": {
+    "action_id": { "type": "string", "description": "Deterministic hash of tool + canonical input." },
+    "type": { "type": "string", "description": "Action tool, e.g. slack_notify." },
+    "params": { "type": "string", "description": "Canonical JSON input the action runs with." },
+    "rationale": { "type": "string" },
+    "status": { "type": "string", "enum": ["proposed", "approved", "denied", "executed", "failed"] },
+    "approved_by": { "type": "string" },
+    "approved_at": { "type": "string", "format": "date-time" },
+    "executed_at": { "type": "string", "format": "date-time" },
+    "result": { "type": "string" }
+  }
+}
