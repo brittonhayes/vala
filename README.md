@@ -1,11 +1,18 @@
 # vala
 
-**An AI detection & response engineer that ships as a single binary.**
+**An agentic security harness that hunts threats, builds detections, and works alerts — as a single binary.**
 
-`vala` is an autonomous agent for security detection & response (D&R) work. Point it
-at your detection rules and it studies, writes, validates, and tests them for you.
-Hand it an alert and it investigates, proposes actions, and writes up an auditable
-case — without ever taking a destructive action you didn't approve.
+`vala` is a system, not a person: an agentic harness that orchestrates a
+Notion-backed brain to investigate questions about threats. It **hunts** against a
+hypothesis, stores the hunt and any **threat intelligence** it surfaces in Notion as
+first-class artifacts, **connects** intel, hunts, alerts, and detections into one
+graph, and feeds what it learns back into **detection development**. Hand it an alert
+and it investigates, proposes actions, and writes up an auditable case — without ever
+taking a destructive action you didn't approve.
+
+Where a SIEM is something you search by hand, vala *explores*: it leans into
+hypothesis-driven hunting, turns the results into a connected Notion brain, and
+transforms that brain into detections.
 
 It runs on Anthropic's Claude, ships as one static Go binary, and needs **no external
 detection toolchain**: Sigma rules are validated *and* unit-tested natively and
@@ -13,16 +20,23 @@ offline, inside the binary. No `sigma-cli`, no `yq`, no Python.
 
 ## Why vala
 
-Detection engineering is slow, manual, and easy to get wrong. Writing a good Sigma
-rule means studying prior art, getting the condition tight, proving it actually
-fires, and leaving behind a runbook so the next person can respond. Working an alert
-means investigating carefully, acting reversibly, and documenting every claim with
-evidence. `vala` does that grunt work with an LLM agent — and bakes the safety rails
-into code, not a prompt, so an autonomous agent can be trusted to do response work.
+Threat hunting and detection engineering are slow, manual, and easy to get wrong.
+Hunting means exploring a question, chasing the data, and recording what you find so
+it isn't lost. Writing a good Sigma rule means studying prior art, getting the
+condition tight, proving it actually fires, and leaving behind a runbook so the next
+person can respond. Working an alert means investigating carefully, acting reversibly,
+and documenting every claim with evidence. `vala` does that exploratory work as a
+harness — storing hunts and intelligence in Notion, connecting them to alerts and
+detections — and bakes the safety rails into code, not a prompt, so it can be trusted
+to do response work.
 
-- **A detection engineer in a binary.** It reads logs, studies gold-standard
+- **Hunting into a Notion-backed brain.** Point it at a threat question and it states
+  a hypothesis, explores the data, records each finding with an evidence pointer, and
+  stores the hunt — then connects intel, hunts, alerts, and detections into one graph.
+- **Detection authoring, in the binary.** It reads logs, studies gold-standard
   exemplars, authors a rule field by field, proves it with embedded test events,
-  and writes the runbook.
+  and writes the runbook — and a hunt that confirms a TTP can be promoted straight
+  into a detection.
 - **Governed incident response.** Alerts flow through a phase-separated loop where
   the agent literally *cannot* execute a write action until a human or policy
   approves it. Enforced in code.
