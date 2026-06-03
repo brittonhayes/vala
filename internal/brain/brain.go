@@ -5,11 +5,14 @@ import "context"
 // Database names. The Mem store keys rows by these; the NTN store maps them to
 // configured Notion database IDs.
 const (
-	DBAlerts   = "alerts"
-	DBCases    = "cases"
-	DBEvidence = "evidence"
-	DBActions  = "actions"
-	DBRuns     = "runs"
+	DBAlerts     = "alerts"
+	DBCases      = "cases"
+	DBEvidence   = "evidence"
+	DBActions    = "actions"
+	DBRuns       = "runs"
+	DBHunts      = "hunts"
+	DBIntel      = "intel"
+	DBDetections = "detections"
 )
 
 // Case status values (the Cases state machine).
@@ -18,6 +21,15 @@ const (
 	StatusInvestigating = "Investigating"
 	StatusContained     = "Contained"
 	StatusResolved      = "Resolved"
+)
+
+// Hunt status values (the Hunts state machine). A hunt opens Open, and closes
+// in one of the three terminal states once the hypothesis has been evaluated.
+const (
+	HuntOpen         = "Open"
+	HuntConfirmed    = "Confirmed"
+	HuntRefuted      = "Refuted"
+	HuntInconclusive = "Inconclusive"
 )
 
 // Alert is a normalized alert ingressing into the system.
@@ -53,6 +65,12 @@ func New(n Notion) *Client {
 				return ntn.DBs.Actions
 			case DBRuns:
 				return ntn.DBs.Runs
+			case DBHunts:
+				return ntn.DBs.Hunts
+			case DBIntel:
+				return ntn.DBs.Intel
+			case DBDetections:
+				return ntn.DBs.Detections
 			}
 			return logical
 		}

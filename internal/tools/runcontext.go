@@ -15,6 +15,9 @@ import (
 type RunContext struct {
 	Env    string
 	CaseID string
+	// HuntID is set instead of CaseID when this RunContext drives a `vala hunt`
+	// run. A RunContext is either a case run or a hunt run, never both.
+	HuntID string
 	Brain  *brain.Client
 	Ledger *governance.Ledger
 	Policy *policy.Set
@@ -22,20 +25,38 @@ type RunContext struct {
 	// Notifier sends comms for slack_notify; nil falls back to a no-op record.
 	Notifier Notifier
 
-	mu        sync.Mutex
-	evidence  []brain.Evidence
-	actions   map[string]*brain.Action
-	rowIDs    map[string]string // action ID -> brain Actions row ID
-	submitted bool
+	mu          sync.Mutex
+	evidence    []brain.Evidence
+	actions     map[string]*brain.Action
+	rowIDs      map[string]string // action ID -> brain Actions row ID
+	submitted   bool
+	huntOutcome string // set by store_hunt
+	huntPageURL string // set by store_hunt
 }
 
-// NewRunContext builds a RunContext.
+// NewRunContext builds a RunContext for a governed case (`vala respond`) run.
 func NewRunContext(env, caseID string, b *brain.Client, led *governance.Ledger, pol *policy.Set) *RunContext {
 	return &RunContext{
 		Env:     env,
 		CaseID:  caseID,
 		Brain:   b,
 		Ledger:  led,
+		Policy:  pol,
+		actions: map[string]*brain.Action{},
+		rowIDs:  map[string]string{},
+	}
+}
+
+// NewHuntContext builds a RunContext for a `vala hunt` run. It carries a HuntID
+// instead of a CaseID; the ledger it creates is never settled (hunting has no
+// approval/execute phase) and is present only so the shared governed tools have
+// the state they expect.
+func NewHuntContext(env, huntID string, b *brain.Client, pol *policy.Set) *RunContext {
+	return &RunContext{
+		Env:     env,
+		HuntID:  huntID,
+		Brain:   b,
+		Ledger:  governance.NewLedger(),
 		Policy:  pol,
 		actions: map[string]*brain.Action{},
 		rowIDs:  map[string]string{},
@@ -112,6 +133,21 @@ func (rc *RunContext) Submitted() bool {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	return rc.submitted
+}
+
+func (rc *RunContext) setHuntOutcome(outcome, pageURL string) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	rc.huntOutcome = outcome
+	rc.huntPageURL = pageURL
+}
+
+// HuntOutcome returns the outcome status and page URL set by store_hunt, or
+// empty strings if the hunt has not been stored.
+func (rc *RunContext) HuntOutcome() (outcome, pageURL string) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	return rc.huntOutcome, rc.huntPageURL
 }
 
 // Notifier sends a notification for an approved action.

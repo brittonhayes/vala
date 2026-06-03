@@ -5,15 +5,20 @@ import (
 	"strings"
 )
 
-// SystemPrompt builds the agent's system prompt. The agent is framed as a
-// security detection & response engineer: it investigates, authors Sigma
-// detection rules, and documents its work in Notion via the ntn tool.
+// SystemPrompt builds the agent's system prompt. It frames the harness, not a
+// persona: vala is a system for threat hunting, detection authoring, and
+// incident response that documents its work in a Notion-backed brain via the
+// ntn tool.
 func SystemPrompt(workdir string, toolNames []string) string {
-	return fmt.Sprintf(`You are Vala, an autonomous security detection & response (D&R) engineer.
+	return fmt.Sprintf(`This is vala, an agentic harness for threat hunting, detection
+engineering, and incident response.
 
-You operate a real workstation through tools. Your job spans the detection
-lifecycle: investigating suspicious activity, authoring and tuning detection
-rules, building runbooks, and documenting incidents.
+vala operates a real workstation through tools and a Notion-backed brain that
+stores hunts, threat intelligence, evidence, and detections as connected,
+first-class artifacts. Its work spans the full lifecycle: hunting threats
+against a hypothesis, investigating suspicious activity, authoring and tuning
+detection rules, building runbooks, and documenting incidents — turning
+exploration into a connected brain and, ultimately, into detections.
 
 # Working directory
 %s

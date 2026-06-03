@@ -1,6 +1,7 @@
-// Command vala is an agentic security detection & response harness: it
-// drives an LLM agent that can investigate, author Sigma detection rules,
-// operate shell/file tools, and document findings in Notion.
+// Command vala is an agentic security harness: it hunts threats against a
+// hypothesis, stores hunts and threat intelligence in a Notion-backed brain,
+// authors and validates Sigma detections, and works alerts through a governed
+// response loop.
 package main
 
 import "github.com/brittonhayes/vala/internal/cmd"

@@ -119,12 +119,15 @@ type NTN struct {
 
 // DBIDs holds the Notion database IDs the brain writes to.
 type DBIDs struct {
-	Alerts   string `json:"alerts"`
-	Cases    string `json:"cases"`
-	Evidence string `json:"evidence"`
-	Actions  string `json:"actions"`
-	Runs     string `json:"runs"`
-	Parent   string `json:"case_page_parent"`
+	Alerts     string `json:"alerts"`
+	Cases      string `json:"cases"`
+	Evidence   string `json:"evidence"`
+	Actions    string `json:"actions"`
+	Runs       string `json:"runs"`
+	Hunts      string `json:"hunts"`
+	Intel      string `json:"intel"`
+	Detections string `json:"detections"`
+	Parent     string `json:"case_page_parent"`
 }
 
 func (n *NTN) bin() string {

@@ -25,12 +25,20 @@ var (
 // rootCmd starts the interactive REPL by default.
 var rootCmd = &cobra.Command{
 	Use:   "vala",
-	Short: "Agentic security detection & response harness",
-	Long: `Vala is an agentic harness for security detection & response work.
+	Short: "Agentic security harness for threat hunting, detection, and response",
+	Long: `vala is an agentic security harness that orchestrates a Notion-backed brain
+to hunt threats, build detections, and work alerts.
 
-It drives an LLM agent that can investigate, author and validate Sigma
-detection rules, run shell/file tools, and document findings in Notion via the
-ntn CLI.
+Rather than statically searching a SIEM by hand, vala explores: it investigates
+a threat question against a hypothesis, stores the hunt and any threat
+intelligence it surfaces in Notion as first-class artifacts, connects intel,
+hunts, alerts, and detections into one graph, and feeds what it learns back into
+detection development.
+
+  vala hunt     explore a threat question and store the hunt
+  vala intel    record and link threat intelligence
+  vala respond  work an alert through the governed response loop
+  vala run      author and validate Sigma detections non-interactively
 
 Run with no arguments to start an interactive session, or use "vala run"
 for a single non-interactive task.`,
@@ -62,7 +70,7 @@ func Execute() {
 func init() {
 	rootCmd.PersistentFlags().StringVar(&flagModel, "model", "", "Anthropic model ID (overrides config)")
 	rootCmd.PersistentFlags().StringVar(&flagPermission, "permission", "", "permission mode: ask | allow | deny")
-	rootCmd.AddCommand(runCmd, respondCmd, harnessCmd, versionCmd)
+	rootCmd.AddCommand(runCmd, respondCmd, huntCmd, intelCmd, harnessCmd, versionCmd)
 }
 
 // built bundles the constructed dependencies for a command.
@@ -74,15 +82,17 @@ type built struct {
 	gate     *permission.Gate
 }
 
-// build resolves config + flags and constructs the shared dependencies.
-func build() (*built, error) {
+// resolveConfig loads config for the current directory and applies persistent
+// flag overrides. It does not construct the LLM client, so commands that only
+// touch the brain (e.g. `vala intel`) can run without an API key.
+func resolveConfig() (config.Config, string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
-		return nil, err
+		return config.Config{}, "", err
 	}
 	cfg, err := config.Load(cwd)
 	if err != nil {
-		return nil, err
+		return cfg, cwd, err
 	}
 	if flagModel != "" {
 		cfg.Model = flagModel
@@ -90,7 +100,16 @@ func build() (*built, error) {
 	if flagPermission != "" {
 		cfg.Permission = flagPermission
 	}
+	return cfg, cwd, nil
+}
 
+// build resolves config + flags and constructs the shared dependencies,
+// including the LLM client (which requires an API key).
+func build() (*built, error) {
+	cfg, cwd, err := resolveConfig()
+	if err != nil {
+		return nil, err
+	}
 	client, err := llm.New(cfg)
 	if err != nil {
 		return nil, err

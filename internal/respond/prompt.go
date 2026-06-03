@@ -10,7 +10,7 @@ import (
 // basePrompt frames the agent for governed incident response. Enforcement of the
 // phase rules is in code (tool exposure + the permission gate); this prompt only
 // explains the contract and hardens the model against return-channel injection.
-const basePrompt = `You are Vala, a security detection & response agent working a single incident
+const basePrompt = `This is vala operating its governed incident-response loop on a single incident
 under a strict, phase-separated governance loop:
 
   plan -> evidence -> propose -> approval -> execute -> report

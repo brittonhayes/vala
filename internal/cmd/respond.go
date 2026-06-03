@@ -9,6 +9,7 @@ import (
 
 	"github.com/brittonhayes/vala/internal/agent"
 	"github.com/brittonhayes/vala/internal/brain"
+	"github.com/brittonhayes/vala/internal/config"
 	"github.com/brittonhayes/vala/internal/governance"
 	"github.com/brittonhayes/vala/internal/policy"
 	"github.com/brittonhayes/vala/internal/respond"
@@ -49,7 +50,7 @@ runs in local mode and the case page is printed to stdout.`,
 			return fmt.Errorf("load policy: %w", err)
 		}
 
-		store := brainStore(built)
+		store := brainStore(built.cfg, built.cwd)
 		bc := brain.New(store)
 
 		eng := &respond.Engine{
@@ -92,10 +93,12 @@ func init() {
 }
 
 // brainStore returns an NTN-backed store when Notion DB IDs are configured,
-// otherwise an in-memory store for local runs.
-func brainStore(b *built) brain.Notion {
-	if b.cfg.Notion.Cases != "" {
-		return &brain.NTN{Dir: b.cwd, DBs: b.cfg.Notion}
+// otherwise an in-memory store for local runs. Any of the case-brain, hunts, or
+// intel databases being set is enough to treat the workspace as configured.
+func brainStore(cfg config.Config, cwd string) brain.Notion {
+	n := cfg.Notion
+	if n.Cases != "" || n.Hunts != "" || n.Intel != "" {
+		return &brain.NTN{Dir: cwd, DBs: n}
 	}
 	return brain.NewMem()
 }

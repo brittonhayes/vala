@@ -1,11 +1,18 @@
 # vala
 
-**An AI detection & response engineer that ships as a single binary.**
+**An agentic security harness that hunts threats, builds detections, and works alerts — as a single binary.**
 
-`vala` is an autonomous agent for security detection & response (D&R) work. Point it
-at your detection rules and it studies, writes, validates, and tests them for you.
-Hand it an alert and it investigates, proposes actions, and writes up an auditable
-case — without ever taking a destructive action you didn't approve.
+`vala` is a system, not a person: an agentic harness that orchestrates a
+Notion-backed brain to investigate questions about threats. It **hunts** against a
+hypothesis, stores the hunt and any **threat intelligence** it surfaces in Notion as
+first-class artifacts, **connects** intel, hunts, alerts, and detections into one
+graph, and feeds what it learns back into **detection development**. Hand it an alert
+and it investigates, proposes actions, and writes up an auditable case — without ever
+taking a destructive action you didn't approve.
+
+Where a SIEM is something you search by hand, vala *explores*: it leans into
+hypothesis-driven hunting, turns the results into a connected Notion brain, and
+transforms that brain into detections.
 
 It runs on Anthropic's Claude, ships as one static Go binary, and needs **no external
 detection toolchain**: Sigma rules are validated *and* unit-tested natively and
@@ -13,16 +20,23 @@ offline, inside the binary. No `sigma-cli`, no `yq`, no Python.
 
 ## Why vala
 
-Detection engineering is slow, manual, and easy to get wrong. Writing a good Sigma
-rule means studying prior art, getting the condition tight, proving it actually
-fires, and leaving behind a runbook so the next person can respond. Working an alert
-means investigating carefully, acting reversibly, and documenting every claim with
-evidence. `vala` does that grunt work with an LLM agent — and bakes the safety rails
-into code, not a prompt, so an autonomous agent can be trusted to do response work.
+Threat hunting and detection engineering are slow, manual, and easy to get wrong.
+Hunting means exploring a question, chasing the data, and recording what you find so
+it isn't lost. Writing a good Sigma rule means studying prior art, getting the
+condition tight, proving it actually fires, and leaving behind a runbook so the next
+person can respond. Working an alert means investigating carefully, acting reversibly,
+and documenting every claim with evidence. `vala` does that exploratory work as a
+harness — storing hunts and intelligence in Notion, connecting them to alerts and
+detections — and bakes the safety rails into code, not a prompt, so it can be trusted
+to do response work.
 
-- **A detection engineer in a binary.** It reads logs, studies gold-standard
+- **Hunting into a Notion-backed brain.** Point it at a threat question and it states
+  a hypothesis, explores the data, records each finding with an evidence pointer, and
+  stores the hunt — then connects intel, hunts, alerts, and detections into one graph.
+- **Detection authoring, in the binary.** It reads logs, studies gold-standard
   exemplars, authors a rule field by field, proves it with embedded test events,
-  and writes the runbook.
+  and writes the runbook — and a hunt that confirms a TTP can be promoted straight
+  into a detection.
 - **Governed incident response.** Alerts flow through a phase-separated loop where
   the agent literally *cannot* execute a write action until a human or policy
   approves it. Enforced in code.
@@ -43,7 +57,23 @@ Start an interactive session and ask it to do detection work:
 vala
 ```
 
-Or run a one-shot task non-interactively:
+Hunt a threat question and store the hunt in the brain:
+
+```sh
+vala hunt "did anyone disable GuardDuty in the last 24h?"
+
+# promote a confirmed hunt straight into a Sigma detection
+vala hunt --promote "is someone exfiltrating data via S3 object copies?"
+```
+
+Record and connect threat intelligence (no API key needed):
+
+```sh
+vala intel add --kind ttp --value attack.t1562.001 --description "GuardDuty disruption"
+vala intel link <hunt-id> --relation intel --to <intel-id>
+```
+
+Or run a one-shot detection task non-interactively:
 
 ```sh
 vala run "validate and test every rule in my detections directory, and report failures"
@@ -70,6 +100,26 @@ Common flags: `--model <id>`, `--permission ask|allow|deny`.
 > && go build -o vala ./cmd/vala`
 
 ## What it does
+
+### Hunt threats
+
+`vala hunt "<question>"` runs a hypothesis-driven hunt: vala states a hypothesis for
+the question, explores read-only data sources (`log_search`, `read`, `grep`, `glob`),
+and records each fact as an immutable **Finding** pointer. When it has enough to
+judge the hypothesis it stores the hunt — question, hypothesis, findings, and a
+**Confirmed / Refuted / Inconclusive** verdict — as a first-class artifact in the
+Notion-backed brain. Findings are held to the same evidence discipline as a case:
+every declarative finding must cite a pointer or be marked a hypothesis, or the hunt
+page is rejected.
+
+Along the way it records **Intelligence** (`record_intel`) — indicators, TTPs,
+actors, and narrative writeups — and **connects** artifacts (`link_artifacts`) so the
+brain becomes a graph of intel ↔ hunts ↔ alerts ↔ detections. A hunt that confirms
+its hypothesis can be `--promote`d straight into detection authoring: vala writes a
+Sigma rule for the behavior it found and links the detection back to the hunt.
+
+This is the core contrast with static SIEM searching: vala *explores* a question,
+turns the answer into a connected brain, and feeds that brain into detections.
 
 ### Author detections
 
@@ -225,6 +275,15 @@ The field-editing tools all funnel through one load → mutate → validate → 
 pipeline: they change a single field, keep the file's comments intact, and report
 only what changed plus the validation status — never the whole file.
 
+Hunting tools (used by `vala hunt`):
+
+| Tool | Class | Purpose |
+|------|-------|---------|
+| `record_finding` | case_write | Append an immutable Finding pointer to the hunt. |
+| `record_intel` | case_write | Record threat intelligence (indicator/ttp/actor/narrative). |
+| `link_artifacts` | case_write | Connect brain rows (intel ↔ hunts ↔ alerts ↔ detections). |
+| `store_hunt` | case_write | Write the hunt narrative + verdict (finding-linted). |
+
 Incident-response tools (used by `vala respond`, governed per phase):
 
 | Tool | Class | Purpose |
@@ -265,15 +324,16 @@ Settings layer (lowest priority first): built-in defaults →
   "max_steps": 50,
   "env": "dev",
   "notion": {
-    "alerts": "", "cases": "", "evidence": "",
-    "actions": "", "runs": "", "case_page_parent": ""
+    "alerts": "", "cases": "", "evidence": "", "actions": "", "runs": "",
+    "hunts": "", "intel": "", "detections": "", "case_page_parent": ""
   }
 }
 ```
 
 `env` selects the policy environment (`dev`/`prod`). Notion database IDs enable real
-Notion writes for `vala respond`; leave them empty to run the case brain in local
-mode. Session transcripts are written to `~/.local/share/vala/sessions/`.
+Notion writes for `vala respond`, `vala hunt`, and `vala intel`; leave them empty to
+run the brain in local mode. Session transcripts are written to
+`~/.local/share/vala/sessions/`.
 
 ## Design
 
