@@ -74,33 +74,6 @@ the final case page is rejected unless every claim cites evidence. The result is
 an auditable case record in Notion. Without configured Notion database IDs, vala
 runs in local mode and prints artifacts to stdout.
 
-## How safety is enforced
-
-Trust in the autonomous loop comes from code-level controls, not from asking the
-model nicely in a prompt:
-
-1. **Per-phase tool exposure.** Write tools don't exist for the agent during
-   investigation, so it can't act early — and return-channel prompt injection
-   can't reach a write tool.
-2. **The permission gate.** `permission.Gate.Decide` is the authoritative
-   backstop: only approved actions run.
-3. **Evidence lint.** The case page is rejected unless every claim cites evidence.
-
-Governance is driven by editable YAML under [`policies/`](policies): `tools.yaml`
-classifies each tool and lists per-environment hard-deny rules (unknown tools fail
-closed), and `decision.yaml` controls which actions need approval and which must
-cite evidence.
-
-`vala harness` replays adversarial scenario fixtures (`tests/`) through the real
-governance machine in a deterministic, no-LLM mode and scores each on five safety
-dimensions (approval compliance, no scope creep, evidence-backed claims, injection
-resistance, schema validity). It exits non-zero on any failure or regression
-versus a committed baseline, so a weakening change is caught in CI:
-
-```sh
-vala harness --fixtures tests --out report.json --baseline runner/baseline.json
-```
-
 ## Writing detections
 
 Rules are [Sigma](https://sigmahq.io) YAML — the vendor-neutral
