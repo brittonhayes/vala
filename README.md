@@ -1,46 +1,16 @@
 # vala
 
-An agentic security harness that hunts threats, builds detections, and works alerts,
-as a single binary.
-
-`vala` is an agentic harness that uses a Notion workspace to investigate questions
-about threats. It hunts against a hypothesis, stores the hunt and any threat
-intelligence it surfaces in Notion, links intel, hunts, alerts, and detections
-together, and feeds what it learns back into detection development. Hand it an alert
-and it investigates, proposes actions, and writes up an auditable case — without
-taking a destructive action you didn't approve.
+An agentic security harness that hunts threats, builds detections, and works
+alerts — as a single Go binary.
 
 A SIEM is something you search by hand. vala works the other way: it runs
 hypothesis-driven hunts, records the results in Notion, and turns them into
-detections.
+detections. Hand it an alert and it investigates, proposes actions, and writes an
+auditable case — without taking a destructive action you didn't approve.
 
-It runs on Anthropic's Claude, ships as one static Go binary, and needs no external
-detection toolchain. Sigma rules are validated and unit-tested natively and offline,
-inside the binary — no `sigma-cli`, no `yq`, no Python.
-
-## Why vala
-
-Threat hunting and detection engineering are slow, manual, and easy to get wrong.
-Hunting means exploring a question, chasing the data, and recording what you find so
-it isn't lost. Writing a good Sigma rule means studying prior art, getting the
-condition tight, proving it fires, and leaving behind a runbook so the next person can
-respond. Working an alert means investigating carefully, acting reversibly, and
-documenting every claim with evidence. `vala` does that work as a harness — storing
-hunts and intelligence in Notion, connecting them to alerts and detections — and keeps
-the safety rails in code rather than a prompt.
-
-- **Hunting into Notion.** Point it at a threat question and it states a hypothesis,
-  explores the data, records each finding with an evidence pointer, and stores the
-  hunt, then links intel, hunts, alerts, and detections together.
-- **Detection authoring, in the binary.** It reads logs, studies reference rules,
-  authors a rule field by field, proves it with embedded test events, and writes the
-  runbook. A hunt that confirms a TTP can be promoted straight into a detection.
-- **Governed incident response.** Alerts flow through a phase-separated loop where the
-  agent can't execute a write action until a human or policy approves it. Enforced in
-  code.
-- **Regression-tested safety.** An adversarial harness replays attack scenarios
-  through the real governance machine in CI, so a prompt or policy change that weakens
-  safety gets caught before it ships.
+It runs on Anthropic's Claude and needs no external detection toolchain. Sigma
+rules are validated and unit-tested natively and offline, inside the binary — no
+`sigma-cli`, no `yq`, no Python.
 
 ## Quickstart
 
@@ -50,7 +20,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 There is one surface: an interactive session with a toolbox. Start it and ask it
-to do the work — hunt, record intel, author detections, or work an alert:
+to do the work:
 
 ```sh
 vala
@@ -63,157 +33,58 @@ vala
 › work the alert in tests/ops/sample_alert.json
 ```
 
-The agent reaches for the right primitives: `open_hunt` to investigate a
-question, `record_intel`/`link_artifacts` to build the intel graph, the
-detection-authoring tools to write Sigma rules, and `open_case` to drive an alert
-through the governed response loop.
-
 Run a one-shot task non-interactively (same toolbox, no TTY):
 
 ```sh
 vala run "validate and test every rule in my detections directory, and report failures"
-
-vala run --yes "author a Sigma rule for an attacker disabling GuardDuty: \
-  study the reference rules first, add a runbook and two tests, then validate it"
 ```
 
-Replay the adversarial safety harness (no API key needed):
+Common flags: `--model <id>`, `--permission ask|allow|deny`, `--yes`.
 
-```sh
-vala harness --fixtures tests
-```
-
-Common flags: `--model <id>`, `--permission ask|allow|deny`.
-
-> **Build from source:** `git clone https://github.com/brittonhayes/vala && cd vala
-> && go build -o vala ./cmd/vala`
+> **Build from source:** `git clone https://github.com/brittonhayes/vala && cd
+> vala && go build -o vala ./cmd/vala`
 
 ## What it does
 
-### Hunt threats
+**Hunt threats.** Point it at a question and it states a hypothesis, explores
+read-only data sources, records each fact as an immutable Finding pointer, and
+stores the hunt — question, hypothesis, findings, and a Confirmed / Refuted /
+Inconclusive verdict — into Notion. It records intelligence (indicators, TTPs,
+actors) and links intel, hunts, alerts, and detections together. A hunt that
+confirms a TTP flows straight into a detection.
 
-Ask vala to hunt a question and it runs a hypothesis-driven hunt: `open_hunt`
-states the question, then it explores read-only data sources (`log_search`,
-`read`, `grep`, `glob`) and records each fact as an immutable **Finding** pointer
-with `record_finding`. When it has enough to judge the hypothesis it calls
-`store_hunt` — question, hypothesis, findings, and a **Confirmed / Refuted /
-Inconclusive** verdict — into Notion. Findings follow the same evidence
-discipline as a case: every declarative finding must cite a pointer or be marked a
-hypothesis, or the hunt page is rejected.
+**Author detections.** A tight loop — study → author → validate → test →
+document. It studies curated reference Sigma rules embedded in the binary, edits
+rules one field at a time (preserving comments and key order), validates against
+the official Sigma JSON schema offline, and runs each rule's inline `tests:`
+through a built-in evaluation engine. vala ships no detections of its own — point
+it at your directory with `detections_dir` (default `detections`).
 
-Along the way it records **Intelligence** (`record_intel`) — indicators, TTPs, actors,
-and narrative writeups — and links artifacts (`link_artifacts`) so intel, hunts,
-alerts, and detections connect to each other. A hunt that confirms its hypothesis
-flows straight into detection authoring: vala writes a Sigma rule for the behavior
-it found and links the detection back to the hunt with `link_artifacts`.
-
-That's the difference from a static SIEM search: vala works a question, records the
-answer, and feeds it into detections.
-
-### Author detections
-
-`vala` (and `vala run`) put the agent to work on Sigma rules through a tight loop:
-**study → author → validate → test → document.**
-
-1. **Study.** `reference_detection` surfaces curated reference Sigma rules (adapted
-   from [SigmaHQ](https://github.com/SigmaHQ/sigma)) embedded in the binary — each
-   carries an inline runbook and executable tests, so the agent learns the shape of a
-   respondable rule before writing its own.
-2. **Author.** Instead of rewriting whole YAML files, the agent edits one field at a
-   time. Comments and key order are preserved, and the rule is re-validated after
-   every change.
-3. **Validate.** `validate_detection` checks rules against the official Sigma JSON
-   schema, embedded in the binary — offline, no external tools.
-4. **Test.** Rules carry inline `tests:` (sample events + expected outcome).
-   `test_detection` runs them through a built-in Sigma evaluation engine, so a rule's
-   *logic* is verified, not just its schema.
-5. **Document.** The `ntn` tool drives the official Notion CLI for runbooks and
-   write-ups.
-
-You keep your rules wherever you already store them — **vala ships no detections of
-its own.** Point it at your directory with `detections_dir` (default `detections`).
-
-### Respond to alerts
-
-Hand vala an alert and it calls `open_case`, which drives the alert through a
-**phase-separated governance loop** where each phase exposes the agent a smaller
-set of tools:
+**Respond to alerts.** Hand it an alert and `open_case` drives it through a
+phase-separated governance loop:
 
 ```
 plan ─► evidence ─► propose ─► approval ─► execute ─► report
 ```
 
-- **evidence** — read-only investigation. Every fact is recorded as an immutable
-  **Evidence** pointer (a query ID, URL, or hash).
-- **propose** — the agent proposes explicit **Actions**, citing evidence. It can't
-  execute anything: write/destructive tools aren't shown to it.
-- **approval** — a human or policy approves each action. An approval binds to a
-  single action by a deterministic `ActionID = hash(tool, canonical input)`.
-- **execute** — only approved actions run, each at most once (idempotent).
-- **report** — a narrative **case page** is written; every claim must cite an
-  Evidence row or be marked a hypothesis, or the page is rejected.
-
-The result is an auditable case record in Notion — **Alerts**, **Cases**,
-**Evidence**, **Actions**, and **Runs** databases plus the narrative page. Without
-configured Notion database IDs, vala runs in local mode and prints the case page to
-stdout. v1 ships a mock `log_search` evidence source and a gated `slack_notify`
-action.
-
-## How safety is enforced
-
-The point of `open_case` is that you can trust an autonomous agent with response
-work. That trust comes from three code-level controls, not from asking the model
-nicely in a prompt:
-
-1. **Per-phase tool exposure.** Write tools don't exist for the agent during
-   investigation, so it can't act early.
-2. **The permission gate.** `permission.Gate.Decide` is the authoritative backstop:
-   only approved actions run.
-3. **Evidence lint.** The case page is rejected unless every claim cites evidence.
-
-Because tool outputs are treated as untrusted data, return-channel **prompt injection
-cannot reach a write tool** during investigation.
-
-### Policy
-
-Governance is driven by editable YAML under [`policies/`](policies):
-
-- `tools.yaml` — classifies each tool (`read`, `case_write`, `control`,
-  `action_execute`) and lists per-environment (`dev`/`prod`) hard-deny rules.
-  Unknown tools default to the most restricted class, so they **fail closed**.
-- `decision.yaml` — which actions require approval, which auto-approve in `dev`,
-  which must cite evidence, and the forbidden-behavior list.
-
-### The adversarial harness
-
-`vala harness` replays adversarial scenario fixtures (`tests/`) through the real
-governance machine in a deterministic recorded mode — **no LLM** — and scores each on
-five safety dimensions: **approval compliance, no scope creep, evidence-backed
-claims, injection resistance, schema validity**. It exits non-zero on any failure or
-on a regression versus a committed baseline, so a prompt or policy change that
-weakens behavior is caught in CI.
-
-```sh
-vala harness --fixtures tests --out report.json --baseline runner/baseline.json
-```
-
-The five threat-model classes (injection, scope creep, evidence-less claims, schema
-fuzzing, replay/idempotency) each have fixtures under `tests/`.
+Each phase exposes a smaller set of tools. Investigation is read-only and records
+immutable Evidence pointers; the agent proposes Actions but can't execute them; a
+human or policy approves each one; only approved actions run, each at most once;
+the final case page is rejected unless every claim cites evidence. The result is
+an auditable case record in Notion. Without configured Notion database IDs, vala
+runs in local mode and prints artifacts to stdout.
 
 ## Writing detections
 
-Detection rules are [Sigma](https://sigmahq.io) YAML files — the vendor-neutral
-detection-as-code standard. Rules convert to many SIEM backends (and platforms like
-[scanner.dev](https://scanner.dev) can ingest Sigma directly), so you write once and
-stay portable.
-
-A rule requires at least `title`, `logsource`, and `detection` (with a `condition`).
-Vala rules also model two optional, schema-valid custom fields:
+Rules are [Sigma](https://sigmahq.io) YAML — the vendor-neutral
+detection-as-code standard, portable across SIEM backends. A rule needs at least
+`title`, `logsource`, and `detection`. vala rules also model two optional,
+schema-valid custom fields:
 
 - **`runbook:`** — inline response guidance (`triage`, `investigate`, `contain`,
-  `escalate`, `references`) so a detection is *respondable* from the rule alone.
-- **`tests:`** — a list of `{name, event, match}` cases the evaluation engine runs,
-  so a rule's logic is verifiable.
+  `escalate`, `references`) so a detection is respondable from the rule alone.
+- **`tests:`** — `{name, event, match}` cases the evaluation engine runs, so a
+  rule's logic is verifiable.
 
 ```yaml
 detection:
@@ -231,75 +102,10 @@ tests:
 ```
 
 See the embedded reference rules under
-[`internal/reference/sigma/`](internal/reference/sigma) (surfaced at runtime by
-`reference_detection`) for complete examples with runbooks and tests.
-
-The inline `tests:` field is backed by a pragmatic, offline Sigma evaluation engine
-(`internal/detect`). It supports the common modifiers (`contains`, `startswith`,
-`endswith`, `all`, `re`, `cidr`, `lt|lte|gt|gte`), `*`/`?` wildcards, dotted/nested
-field lookups, and the `1 of` / `all of` condition quantifiers. Unsupported
-constructs (e.g. aggregation `| count() …` conditions) are reported as such rather
-than silently passing.
-
-## Tools
-
-The agent works from one toolbox; the tables below group it by what each tool is
-for, not by separate commands. Detection-authoring tools:
-
-| Tool | Read-only | Purpose |
-|------|-----------|---------|
-| `bash` | no | Run shell commands (git, jq, `aws`, …). |
-| `read` / `write` / `edit` | read / no / no | File operations. |
-| `ls` / `glob` / `grep` | yes | Navigate and search the workspace. |
-| `reference_detection` | yes | Browse curated reference Sigma rules. |
-| `validate_detection` | yes | Validate Sigma rules against the embedded schema (offline). |
-| `test_detection` | yes | Run a rule's inline `tests:` through the evaluation engine. |
-| `set_detection_meta` | no | Set scalar metadata (title, id, status, level, …). |
-| `set_detection_logsource` | no | Set the `logsource` block. |
-| `edit_detection_logic` | no | Manage search identifiers and the `condition`. |
-| `manage_detection_list` | no | Add/remove `references`, `falsepositives`, `tags`, `fields`. |
-| `set_detection_runbook` | no | Set the inline response `runbook:`. |
-| `manage_detection_tests` | no | Add/remove inline `tests:` cases. |
-| `ntn` | no | Drive the official Notion CLI for runbooks & incident docs. |
-
-The field-editing tools all funnel through one load → mutate → validate → write
-pipeline: they change a single field, keep the file's comments intact, and report
-only what changed plus the validation status — never the whole file.
-
-Hunting & intel tools:
-
-| Tool | Class | Purpose |
-|------|-------|---------|
-| `open_hunt` | case_write | Open a hunt and make it the session's active hunt. |
-| `record_finding` | case_write | Append an immutable Finding pointer to the hunt. |
-| `record_intel` | case_write | Record threat intelligence (indicator/ttp/actor/narrative). |
-| `link_artifacts` | case_write | Connect brain rows (intel ↔ hunts ↔ alerts ↔ detections). |
-| `store_hunt` | case_write | Write the hunt narrative + verdict (finding-linted). |
-
-Incident-response tools — `open_case` enters the governed loop, which exposes the
-rest per phase:
-
-| Tool | Class | Purpose |
-|------|-------|---------|
-| `open_case` | case_write | Work an alert through the governed loop and return a case summary. |
-| `log_search` | read | Query logs for evidence (mock-capable). |
-| `record_evidence` | case_write | Append an immutable Evidence pointer. |
-| `propose_action` | control | Propose a write action for approval (citing evidence). |
-| `submit_for_approval` | control | End the proposal phase. |
-| `write_case_page` | case_write | Write the narrative page (evidence-linted). |
-| `slack_notify` | action_execute | The single gated write action in v1. |
-
-## Permissions
-
-Every **non-read-only** tool call is gated.
-
-- `ask` (default) — prompt the operator for each call. Answer `a` to allowlist a tool
-  for the session.
-- `allow` — auto-approve (trusted, unattended runs; `vala run --yes`).
-- `deny` — block all writes (investigation / dry-run only).
-
-Read-only tools (`read`, `ls`, `glob`, `grep`, `reference_detection`,
-`validate_detection`, `test_detection`) always run.
+[`internal/reference/sigma/`](internal/reference/sigma) for complete examples. The
+offline evaluation engine (`internal/detect`) supports the common modifiers
+(`contains`, `startswith`, `endswith`, `all`, `re`, `cidr`, `lt|lte|gt|gte`),
+`*`/`?` wildcards, dotted field lookups, and the `1 of` / `all of` quantifiers.
 
 ## Configuration
 
@@ -311,11 +117,8 @@ Settings layer (lowest priority first): built-in defaults →
 ```json
 {
   "model": "claude-opus-4-8",
-  "max_tokens": 8192,
   "permission": "ask",
-  "allowlist": ["read", "ls", "glob", "grep"],
   "detections_dir": "detections",
-  "max_steps": 50,
   "env": "dev",
   "notion": {
     "alerts": "", "cases": "", "evidence": "", "actions": "", "runs": "",
@@ -324,24 +127,10 @@ Settings layer (lowest priority first): built-in defaults →
 }
 ```
 
-`env` selects the policy environment (`dev`/`prod`). Notion database IDs enable real
-Notion writes for hunts, cases, and intel; leave them empty to run the brain in
-local mode (artifacts are printed instead). Session transcripts are written to
-`~/.local/share/vala/sessions/`.
-
-## Design
-
-The architecture follows [charmbracelet/crush](https://github.com/charmbracelet/crush)
-(one `Tool` type + one embedded `.md` description per tool, a permission gate,
-sessions) and the "small extensible core" stance of
-[earendil-works/pi](https://github.com/earendil-works/pi). The tool registry
-(`internal/tools/default.go`) is the single extension point.
-
-Planned next:
-
-- An `aws` tool for cloud investigation & response (read verbs gated tighter).
-- Sigma → backend query conversion (e.g. via pySigma) for export to a SIEM.
-- Agent Skills (`SKILL.md`) for reusable D&R playbooks.
+`env` selects the policy environment (`dev`/`prod`). Notion database IDs enable
+real Notion writes; leave them empty to run in local mode. Every non-read-only
+tool call is gated by `--permission`: `ask` (default) prompts per call, `allow`
+auto-approves for unattended runs, `deny` blocks all writes.
 
 ## Development
 
@@ -349,17 +138,16 @@ Planned next:
 go build ./...
 go vet ./...
 go test ./...
-
-# build / run the binary
-go build -o vala ./cmd/vala
-./vala version
-
-# replay the adversarial harness
 go run ./cmd/vala harness --fixtures tests
 ```
 
-CI (GitHub Actions) runs build, vet, `go test -race`, the adversarial harness (diffed
-against `runner/baseline.json`), and a `gofmt` check on every push and pull request.
+CI runs build, vet, `go test -race`, the adversarial harness (diffed against
+`runner/baseline.json`), and a `gofmt` check on every push and pull request.
+
+The architecture follows [charmbracelet/crush](https://github.com/charmbracelet/crush)
+(one `Tool` type + one embedded `.md` description per tool, a permission gate,
+sessions). The tool registry (`internal/tools/default.go`) is the single
+extension point.
 
 ## License
 
