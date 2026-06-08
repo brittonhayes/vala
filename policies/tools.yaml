@@ -20,6 +20,7 @@ classes:
     - open_case
     - record_evidence
     - write_case_page
+    - queue_hunt
     - open_hunt
     - record_finding
     - store_hunt

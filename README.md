@@ -1,16 +1,15 @@
 # vala
 
-An agentic security harness that hunts threats, builds detections, and works
-alerts — as a single Go binary.
+An agentic threat-hunting system in a single Go binary.
 
-A SIEM is something you search by hand. vala works the other way: it runs
-hypothesis-driven hunts, records the results in Notion, and turns them into
-detections. Hand it an alert and it investigates, proposes actions, and writes an
-auditable case — without taking a destructive action you didn't approve.
+vala runs one loop: scope a hypothesis, hunt it, reach a verdict, and write the
+detection a confirmed hunt warrants. Every step is recorded in Notion. Hand it an
+alert instead and it investigates, proposes actions, and writes an auditable
+case, executing nothing you haven't approved.
 
-It runs on Anthropic's Claude and needs no external detection toolchain. Sigma
-rules are validated and unit-tested natively and offline, inside the binary — no
-`sigma-cli`, no `yq`, no Python.
+It runs on Anthropic's Claude and needs no external detection toolchain: Sigma
+rules are validated and unit-tested offline, inside the binary — no `sigma-cli`,
+no `yq`, no Python.
 
 ## Quickstart
 
@@ -19,17 +18,18 @@ go install github.com/brittonhayes/vala/cmd/vala@latest
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-There is one surface: an interactive session with a toolbox. Start it and ask it
-to do the work:
+vala has a single surface: an interactive session. Start it and describe the
+work:
 
 ```sh
 vala
 ```
 
 ```
+› queue a hunt: a CISA advisory says GuardDuty is being disabled — behavior
+  DeleteDetector, data source cloudtrail
 › hunt whether anyone disabled GuardDuty in the last 24h, and store the hunt
-› record the TTP attack.t1562.001 and link it to that hunt
-› author a Sigma rule for an attacker disabling GuardDuty, with a runbook and tests
+› now that it's confirmed, author and link a Sigma detection for that behavior
 › work the alert in tests/ops/sample_alert.json
 ```
 
@@ -44,24 +44,40 @@ Common flags: `--model <id>`, `--permission ask|allow|deny`, `--yes`.
 > **Build from source:** `git clone https://github.com/brittonhayes/vala && cd
 > vala && go build -o vala ./cmd/vala`
 
-## What it does
+## The hunt loop
 
-**Hunt threats.** Point it at a question and it states a hypothesis, explores
-read-only data sources, records each fact as an immutable Finding pointer, and
-stores the hunt — question, hypothesis, findings, and a Confirmed / Refuted /
-Inconclusive verdict — into Notion. It records intelligence (indicators, TTPs,
-actors) and links intel, hunts, alerts, and detections together. A hunt that
-confirms a TTP flows straight into a detection.
+vala runs one loop, following the shape established hunt frameworks share
+(Sqrrl's Hunting Loop, Splunk PEAK, TaHiTI). See
+[`docs/threat-hunting-system.md`](docs/threat-hunting-system.md) for the
+rationale.
 
-**Author detections.** A tight loop — study → author → validate → test →
-document. It studies curated reference Sigma rules embedded in the binary, edits
-rules one field at a time (preserving comments and key order), validates against
-the official Sigma JSON schema offline, and runs each rule's inline `tests:`
-through a built-in evaluation engine. vala ships no detections of its own — point
-it at your directory with `detections_dir` (default `detections`).
+**1 · Scope.** State the hypothesis with ABLE — the testable adversary
+**B**ehavior and the data-source **L**ocation where it would appear. `queue_hunt`
+records a trigger (intel, a hunch, a fresh CVE, a past incident) on a prioritized
+**backlog**.
 
-**Respond to alerts.** Hand it an alert and `open_case` drives it through a
-phase-separated governance loop:
+**2 · Hunt.** `open_hunt` starts a hypothesis-driven hunt. vala explores
+read-only data sources, recording each fact as an immutable Finding pointer and
+each indicator, TTP, or actor as a first-class artifact.
+
+**3 · Conclude.** `store_hunt` writes the narrative page with a Confirmed,
+Refuted, or Inconclusive verdict. Every declarative finding must cite a Finding
+ID, or the page is rejected.
+
+**4 · Automate.** A confirmed hunt produces a detection. vala authors a Sigma
+rule for the proven behavior — study, author, validate, test, document — editing
+one field at a time to preserve comments and key order, checking it against the
+official Sigma JSON schema offline, and running its inline `tests:` through a
+built-in evaluation engine before linking it back to the hunt. A refuted hunt
+produces none. vala ships no detections of its own; point it at your directory
+with `detections_dir` (default `detections`).
+
+In Notion, backlog, intel, hunts, and detections form one connected graph.
+
+### Responding to alerts
+
+Hand it an alert and `open_case` drives it through a phase-separated governance
+loop:
 
 ```
 plan ─► evidence ─► propose ─► approval ─► execute ─► report
@@ -74,17 +90,18 @@ the final case page is rejected unless every claim cites evidence. The result is
 an auditable case record in Notion. Without configured Notion database IDs, vala
 runs in local mode and prints artifacts to stdout.
 
-## Writing detections
+## Detections
 
-Rules are [Sigma](https://sigmahq.io) YAML — the vendor-neutral
-detection-as-code standard, portable across SIEM backends. A rule needs at least
-`title`, `logsource`, and `detection`. vala rules also model two optional,
-schema-valid custom fields:
+A confirmed hunt's output is a [Sigma](https://sigmahq.io) rule — vendor-neutral
+detection-as-code that converts to most SIEM backends. vala writes it to your
+`detections_dir` and leaves deployment to your pipeline.
+
+It populates two optional, schema-valid fields so the rule stands on its own:
 
 - **`runbook:`** — inline response guidance (`triage`, `investigate`, `contain`,
-  `escalate`, `references`) so a detection is respondable from the rule alone.
-- **`tests:`** — `{name, event, match}` cases the evaluation engine runs, so a
-  rule's logic is verifiable.
+  `escalate`, `references`).
+- **`tests:`** — `{name, event, match}` cases vala runs through its offline
+  evaluation engine to check the rule's logic.
 
 ```yaml
 detection:
@@ -101,11 +118,11 @@ tests:
     match: false
 ```
 
-See the embedded reference rules under
-[`internal/reference/sigma/`](internal/reference/sigma) for complete examples. The
-offline evaluation engine (`internal/detect`) supports the common modifiers
-(`contains`, `startswith`, `endswith`, `all`, `re`, `cidr`, `lt|lte|gt|gte`),
-`*`/`?` wildcards, dotted field lookups, and the `1 of` / `all of` quantifiers.
+The offline engine (`internal/detect`) validates rules against the official Sigma
+schema and supports the common modifiers (`contains`, `startswith`, `endswith`,
+`all`, `re`, `cidr`, `lt|lte|gt|gte`), `*`/`?` wildcards, dotted field lookups,
+and the `1 of` / `all of` quantifiers. The embedded reference rules under
+[`internal/reference/sigma/`](internal/reference/sigma) are complete examples.
 
 ## Configuration
 
@@ -122,7 +139,8 @@ Settings layer (lowest priority first): built-in defaults →
   "env": "dev",
   "notion": {
     "alerts": "", "cases": "", "evidence": "", "actions": "", "runs": "",
-    "hunts": "", "intel": "", "detections": "", "case_page_parent": ""
+    "hunts": "", "intel": "", "detections": "", "backlog": "",
+    "case_page_parent": ""
   }
 }
 ```
