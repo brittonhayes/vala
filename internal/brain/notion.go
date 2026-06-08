@@ -127,6 +127,7 @@ type DBIDs struct {
 	Hunts      string `json:"hunts"`
 	Intel      string `json:"intel"`
 	Detections string `json:"detections"`
+	Backlog    string `json:"backlog"`
 	Parent     string `json:"case_page_parent"`
 }
 

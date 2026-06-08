@@ -15,6 +15,11 @@ type Hunt struct {
 	Hypothesis string `json:"hypothesis"`
 	Status     string `json:"status"`
 	MITRE      string `json:"mitre"`
+	// Behavior and DataSource carry the ABLE scoping of the hypothesis: the
+	// testable adversary Behavior and the Location (data source) it is hunted in.
+	// They are optional so a hunt can still open from a bare question.
+	Behavior   string `json:"behavior"`
+	DataSource string `json:"data_source"`
 }
 
 // HuntPage is the structured narrative generated for a completed hunt. Render
@@ -109,14 +114,21 @@ func LintHuntPage(p HuntPage) []string {
 
 // OpenHunt creates a Hunts row in the Open state and returns its ID.
 func (c *Client) OpenHunt(ctx context.Context, h Hunt) (huntID string, err error) {
-	return c.n.CreateRow(ctx, c.dbName(DBHunts), map[string]any{
+	props := map[string]any{
 		"hunt_id":    h.Question,
 		"question":   h.Question,
 		"hypothesis": h.Hypothesis,
 		"status":     HuntOpen,
 		"mitre":      h.MITRE,
 		"started_at": nowRFC3339(),
-	})
+	}
+	if h.Behavior != "" {
+		props["behavior"] = h.Behavior
+	}
+	if h.DataSource != "" {
+		props["data_source"] = h.DataSource
+	}
+	return c.n.CreateRow(ctx, c.dbName(DBHunts), props)
 }
 
 // RecordFinding appends an immutable Evidence row linked to the hunt and returns

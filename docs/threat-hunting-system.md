@@ -220,26 +220,27 @@ system prompt, the README, and the product surface — plus one small new artifa
 
 ---
 
-## Concrete, minimal changes
+## What was built
 
-Ordered by leverage, smallest first. None is a large refactor.
+All four changes landed in this branch — a reframing plus one small new artifact,
+no large refactor.
 
-1. **Reframe the system prompt** (`internal/agent/prompt.go`). Lead with the hunt
-   loop (Scope → Hunt → Conclude → Automate). Present detection authoring as the
-   loop's Act phase, not a co-equal "Authoring Sigma detection rules" section.
-   Bake in ABLE: a hypothesis must name a *behavior* and a *data source* before
-   the hunt starts.
-2. **Add the Hunt Backlog** — a sixth brain table + a small `queue_hunt` tool and
-   a way for `open_hunt` to consume a backlog row. This is the only new data
-   model. It makes triggers durable and the hunt program measurable.
-3. **Make "automate" the expected close of a Confirmed hunt.** After `store_hunt`
-   returns `Confirmed`, the prompt should drive straight into authoring + linking
-   a Sigma rule. Optionally enforce: a `Confirmed` hunt with no linked detection
-   and no explicit "no detection warranted" note is incomplete.
-4. **Reframe the README and surfaces** around the single loop; move "Respond to
-   alerts" to a clearly secondary section. The git history (`7b80afd` reframing
-   away from a detection-engineer persona, `a191a0e` "don't ship detections")
-   shows this narrowing is already the project's direction.
+1. **Reframed the system prompt** (`internal/agent/prompt.go`). It now leads with
+   the hunt loop (Scope → Hunt → Conclude → Automate) and presents detection
+   authoring as the loop's *Automate* step, not a co-equal capability. ABLE is
+   baked in: a hypothesis should name a *behavior* and a *data source*.
+2. **Added the Hunt Backlog** — a sixth brain table (`internal/brain/backlog.go`,
+   `DBBacklog`), the `queue_hunt` tool (`internal/tools/queue_hunt.go`), and
+   `open_hunt` consuming a `backlog_id` to retire the item and link the hunt.
+   `open_hunt`/the `Hunt` row also carry ABLE `behavior` + `data_source`.
+3. **Made "automate" the expected close of a Confirmed hunt.** `store_hunt` now
+   returns an outcome-aware directive: a `Confirmed` verdict drives straight into
+   authoring + linking a Sigma rule (or an explicit "no detection warranted"
+   note); a `Refuted`/`Inconclusive` verdict explicitly does not.
+4. **Reframed the README** around the single loop and moved "Respond to alerts"
+   to a clearly secondary section. This continues the project's existing
+   narrowing (`7b80afd` reframing away from a detection-engineer persona,
+   `a191a0e` "don't ship detections").
 
 ## What to *not* build (staying focused)
 

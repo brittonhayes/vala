@@ -13,6 +13,7 @@ const (
 	DBHunts      = "hunts"
 	DBIntel      = "intel"
 	DBDetections = "detections"
+	DBBacklog    = "backlog"
 )
 
 // Case status values (the Cases state machine).
@@ -30,6 +31,14 @@ const (
 	HuntConfirmed    = "Confirmed"
 	HuntRefuted      = "Refuted"
 	HuntInconclusive = "Inconclusive"
+)
+
+// Backlog status values. A trigger is queued as a hypothesis, gets opened into
+// an active hunt, and is retired once that hunt reaches a verdict.
+const (
+	BacklogQueued = "Queued"
+	BacklogOpened = "Opened"
+	BacklogDone   = "Done"
 )
 
 // Alert is a normalized alert ingressing into the system.
@@ -71,6 +80,8 @@ func New(n Notion) *Client {
 				return ntn.DBs.Intel
 			case DBDetections:
 				return ntn.DBs.Detections
+			case DBBacklog:
+				return ntn.DBs.Backlog
 			}
 			return logical
 		}

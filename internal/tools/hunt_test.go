@@ -25,6 +25,54 @@ func newHuntRC(t *testing.T) (*RunContext, *brain.Mem, string) {
 	return rc, mem, huntID
 }
 
+func TestQueueHuntTool(t *testing.T) {
+	mem := brain.NewMem()
+	bc := brain.New(mem)
+	rc := NewRunContext("dev", "", bc, governance.NewLedger(), policy.Default())
+	res := run(t, &QueueHunt{RC: rc}, map[string]any{
+		"trigger":     "fresh CVE",
+		"hypothesis":  "the CVE is being exploited in our env",
+		"behavior":    "exploit attempt against the vulnerable service",
+		"data_source": "cloudtrail",
+		"priority":    "high",
+	})
+	if res.IsError {
+		t.Fatalf("queue_hunt failed: %s", res.Content)
+	}
+	rows := mem.RowsIn(brain.DBBacklog)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 backlog row, got %d", len(rows))
+	}
+	if got := rows[0].Props["status"]; got != brain.BacklogQueued {
+		t.Fatalf("backlog status = %v, want %q", got, brain.BacklogQueued)
+	}
+}
+
+// TestOpenHuntConsumesBacklog asserts open_hunt retires the backlog item it was
+// opened from and links it to the new hunt.
+func TestOpenHuntConsumesBacklog(t *testing.T) {
+	mem := brain.NewMem()
+	bc := brain.New(mem)
+	rc := NewRunContext("dev", "", bc, governance.NewLedger(), policy.Default())
+	backlogID, err := bc.QueueHunt(context.Background(), brain.BacklogItem{Trigger: "tg", Hypothesis: "hp"})
+	if err != nil {
+		t.Fatalf("QueueHunt: %v", err)
+	}
+	res := run(t, &OpenHunt{RC: rc}, map[string]any{
+		"question": "is hp true?", "behavior": "b", "data_source": "cloudtrail", "backlog_id": backlogID,
+	})
+	if res.IsError {
+		t.Fatalf("open_hunt failed: %s", res.Content)
+	}
+	if got := mem.Rows[backlogID].Props["status"]; got != brain.BacklogOpened {
+		t.Fatalf("backlog status = %v, want %q", got, brain.BacklogOpened)
+	}
+	hunts := mem.RowsIn(brain.DBHunts)
+	if len(hunts) != 1 || hunts[0].Props["behavior"] != "b" {
+		t.Fatalf("hunt not opened with ABLE behavior: %+v", hunts)
+	}
+}
+
 func TestRecordFindingTool(t *testing.T) {
 	rc, mem, huntID := newHuntRC(t)
 	res := run(t, &RecordFinding{RC: rc}, map[string]any{
@@ -123,7 +171,7 @@ func TestLinkArtifactsTool(t *testing.T) {
 // action_execute and silently disappear from the hunt.
 func TestHuntToolsAreCaseWrite(t *testing.T) {
 	pol := policy.Default()
-	for _, name := range []string{"record_finding", "store_hunt", "record_intel", "link_artifacts"} {
+	for _, name := range []string{"queue_hunt", "open_hunt", "record_finding", "store_hunt", "record_intel", "link_artifacts"} {
 		if got := pol.ClassOf(name); got != governance.ClassCaseWrite {
 			t.Errorf("%s class = %q, want %q", name, got, governance.ClassCaseWrite)
 		}

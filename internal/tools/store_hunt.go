@@ -100,7 +100,16 @@ func (t *StoreHunt) Run(ctx context.Context, input json.RawMessage) (tool.Result
 	if url == "" {
 		url = "(written)"
 	}
-	return tool.Text("hunt stored (" + in.Outcome + "): " + url), nil
+	msg := "hunt stored (" + in.Outcome + "): " + url
+	switch in.Outcome {
+	case brain.HuntConfirmed:
+		// The deliverable of a confirmed hunt is an automated detection. Drive the
+		// Act phase: author a Sigma rule for the proven behavior and link it.
+		msg += "\n\nAct: the deliverable of a confirmed hunt is a detection. Author a Sigma rule for the proven behavior (with falsepositives, an inline runbook, and tests), validate and test it, then link it to this hunt with link_artifacts. If no detection is warranted, say so explicitly and why."
+	case brain.HuntRefuted, brain.HuntInconclusive:
+		msg += "\n\nAct: no detection is warranted. The retired hypothesis and its evidence are the deliverable; note any rule-tuning follow-ups in next_steps."
+	}
+	return tool.Text(msg), nil
 }
 
 func summarizeFindings(findings []brain.Claim) string {

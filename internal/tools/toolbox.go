@@ -41,7 +41,9 @@ func Toolbox(dir string, rc *RunContext, webhook string, cr CaseRunner) *tool.Re
 		&ManageDetectionTests{Dir: dir},
 		// Investigation evidence source (mock-capable).
 		&LogSearch{Dir: dir},
-		// Hunting: open a hunt, record findings and intel, link artifacts, store it.
+		// Hunting: queue a trigger, open a hunt, record findings and intel, link
+		// artifacts, store it.
+		&QueueHunt{RC: rc},
 		&OpenHunt{RC: rc},
 		&RecordFinding{RC: rc},
 		&RecordIntel{RC: rc},
