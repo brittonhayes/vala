@@ -90,17 +90,18 @@ the final case page is rejected unless every claim cites evidence. The result is
 an auditable case record in Notion. Without configured Notion database IDs, vala
 runs in local mode and prints artifacts to stdout.
 
-## Writing detections
+## Detections
 
-Rules are [Sigma](https://sigmahq.io) YAML — the vendor-neutral
-detection-as-code standard, portable across SIEM backends. A rule needs at least
-`title`, `logsource`, and `detection`. vala rules also model two optional,
-schema-valid custom fields:
+A confirmed hunt's output is a [Sigma](https://sigmahq.io) rule — vendor-neutral
+detection-as-code that converts to most SIEM backends. vala writes it to your
+`detections_dir` and leaves deployment to your pipeline.
+
+It populates two optional, schema-valid fields so the rule stands on its own:
 
 - **`runbook:`** — inline response guidance (`triage`, `investigate`, `contain`,
-  `escalate`, `references`) so a detection is respondable from the rule alone.
-- **`tests:`** — `{name, event, match}` cases the evaluation engine runs, so a
-  rule's logic is verifiable.
+  `escalate`, `references`).
+- **`tests:`** — `{name, event, match}` cases vala runs through its offline
+  evaluation engine to check the rule's logic.
 
 ```yaml
 detection:
@@ -117,11 +118,11 @@ tests:
     match: false
 ```
 
-See the embedded reference rules under
-[`internal/reference/sigma/`](internal/reference/sigma) for complete examples. The
-offline evaluation engine (`internal/detect`) supports the common modifiers
-(`contains`, `startswith`, `endswith`, `all`, `re`, `cidr`, `lt|lte|gt|gte`),
-`*`/`?` wildcards, dotted field lookups, and the `1 of` / `all of` quantifiers.
+The offline engine (`internal/detect`) validates rules against the official Sigma
+schema and supports the common modifiers (`contains`, `startswith`, `endswith`,
+`all`, `re`, `cidr`, `lt|lte|gt|gte`), `*`/`?` wildcards, dotted field lookups,
+and the `1 of` / `all of` quantifiers. The embedded reference rules under
+[`internal/reference/sigma/`](internal/reference/sigma) are complete examples.
 
 ## Configuration
 
