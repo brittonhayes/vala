@@ -228,6 +228,8 @@ func summarize(name string, input json.RawMessage) string {
 		}
 	case "grep", "glob":
 		return get("pattern")
+	case "recall":
+		return get("query")
 	}
 	return strings.TrimSpace(string(input))
 }

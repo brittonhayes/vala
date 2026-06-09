@@ -165,6 +165,55 @@ func TestLinkArtifactsTool(t *testing.T) {
 	}
 }
 
+// TestRecallTool exercises the read-only recall tool against a brain that
+// already holds a prior hunt and a piece of intel.
+func TestRecallTool(t *testing.T) {
+	mem := brain.NewMem()
+	bc := brain.New(mem)
+	ctx := context.Background()
+	if _, err := bc.OpenHunt(ctx, brain.Hunt{Question: "did anyone disable GuardDuty?", Behavior: "DeleteDetector"}); err != nil {
+		t.Fatalf("OpenHunt: %v", err)
+	}
+	if _, err := bc.RecordIntel(ctx, brain.Intel{Kind: brain.IntelTTP, Value: "attack.t1562.001"}); err != nil {
+		t.Fatalf("RecordIntel: %v", err)
+	}
+	rc := NewRunContext("dev", "", bc, governance.NewLedger(), policy.Default())
+	rec := &Recall{RC: rc}
+
+	// A scoped query surfaces the matching hunt and nothing else.
+	res := run(t, rec, map[string]any{"query": "DeleteDetector", "scope": "hunts"})
+	if res.IsError {
+		t.Fatalf("recall failed: %s", res.Content)
+	}
+	if !strings.Contains(res.Content, "DeleteDetector") || !strings.Contains(res.Content, "## hunts") {
+		t.Fatalf("recall missing the hunt: %q", res.Content)
+	}
+	if strings.Contains(res.Content, "## intel") {
+		t.Fatalf("scope=hunts should not return intel: %q", res.Content)
+	}
+
+	// scope=all spans databases.
+	all := run(t, rec, map[string]any{"query": "attack.t1562.001"})
+	if all.IsError || !strings.Contains(all.Content, "## intel") {
+		t.Fatalf("recall all-scope missing intel: %q", all.Content)
+	}
+
+	// A miss is a clear "new ground" message, not an error.
+	miss := run(t, rec, map[string]any{"query": "nonexistent-behavior"})
+	if miss.IsError || !strings.Contains(miss.Content, "new ground") {
+		t.Fatalf("expected a new-ground message, got: %q", miss.Content)
+	}
+}
+
+// TestRecallIsReadClass guards against policy drift: recall must be classified
+// read so it stays available during investigation and never requires approval.
+// Misclassification would default it to action_execute and hide it.
+func TestRecallIsReadClass(t *testing.T) {
+	if got := policy.Default().ClassOf("recall"); got != governance.ClassRead {
+		t.Errorf("recall class = %q, want %q", got, governance.ClassRead)
+	}
+}
+
 // TestHuntToolsAreCaseWrite guards against policy drift: every hunt/intel tool
 // must be classified case_write so it is exposed during the hunt phases and
 // never treated as a gated action. A tool missing from policy would default to

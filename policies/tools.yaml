@@ -16,6 +16,7 @@ classes:
     - reference_detection
     - validate_detection
     - test_detection
+    - recall
   case_write:
     - open_case
     - record_evidence

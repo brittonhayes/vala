@@ -109,6 +109,7 @@ func TestReadOnlyFlags(t *testing.T) {
 	readOnly := map[string]bool{
 		"read": true, "ls": true, "glob": true, "grep": true,
 		"validate_detection": true, "reference_detection": true, "test_detection": true,
+		"recall": true,
 	}
 	notReadOnly := map[string]bool{
 		"bash": true, "write": true, "edit": true, "ntn": true,

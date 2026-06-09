@@ -40,10 +40,15 @@ mode for when you are handed one.
 Everything is a tool — there are no modes or commands, just primitives you
 compose. The brain stores backlog items, hunts, intel, evidence, and detections
 as connected, first-class artifacts; pick the smallest set of tools and link
-related artifacts together. The loop has four steps:
+related artifacts together. Before opening new work, "recall" reads the brain
+back so each hunt compounds on the last instead of repeating settled ground. The
+loop has four steps:
 
 1. Scope. Phrase the hypothesis with ABLE — the testable adversary Behavior, the
-   data-source Location it would appear in, and the Evidence you'd expect.
+   data-source Location it would appear in, and the Evidence you'd expect. Call
+   "recall" first: if a prior hunt already settled this hypothesis, or a
+   detection already covers the behavior, say so and stop — do not re-hunt
+   ground the brain has already covered; pull forward any related intel instead.
    "queue_hunt" parks a trigger (intel, a hunch, a fresh CVE, a past incident) on
    the backlog as a prioritized hypothesis when you are not hunting it right now.
 2. Hunt. Call "open_hunt" with the question (and, ideally, behavior + data_source,

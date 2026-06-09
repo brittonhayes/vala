@@ -63,6 +63,7 @@ func Default() *Set {
 				"read", "ls", "glob", "grep",
 				"log_search", "reference_detection",
 				"validate_detection", "test_detection",
+				"recall",
 			},
 			"case_write": {
 				"open_case", "record_evidence", "write_case_page",

@@ -14,6 +14,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -25,7 +28,7 @@ type Row struct {
 	Props map[string]any `json:"props"`
 }
 
-// Notion is the minimal write surface the case brain needs.
+// Notion is the read/write surface the case brain needs.
 type Notion interface {
 	// CreateRow appends a row to a database and returns its ID.
 	CreateRow(ctx context.Context, db string, props map[string]any) (string, error)
@@ -33,6 +36,11 @@ type Notion interface {
 	UpdateRow(ctx context.Context, id string, props map[string]any) error
 	// CreatePage creates a narrative page and returns its ID and URL.
 	CreatePage(ctx context.Context, title string, markdown string) (id, url string, err error)
+	// Query returns up to limit rows in a database whose contents match the
+	// free-text query (an empty query matches everything). It is the read
+	// counterpart to CreateRow that lets the agent recall what is already in the
+	// brain before opening new work.
+	Query(ctx context.Context, db, query string, limit int) ([]Row, error)
 }
 
 // Mem is an in-memory Notion implementation for tests, the harness, and
@@ -107,6 +115,36 @@ func (m *Mem) RowsIn(db string) []*Row {
 	return out
 }
 
+// Query returns rows in db whose properties contain the query substring
+// (case-insensitive; an empty query matches all), sorted by ID for a stable
+// result and capped at limit.
+func (m *Mem) Query(_ context.Context, db, query string, limit int) ([]Row, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	q := strings.ToLower(query)
+	var out []Row
+	for _, r := range m.Rows {
+		if r.DB != db {
+			continue
+		}
+		if q != "" && !strings.Contains(strings.ToLower(rowText(r)), q) {
+			continue
+		}
+		out = append(out, *r)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+// rowText renders a row's properties as a single searchable string.
+func rowText(r *Row) string {
+	b, _ := json.Marshal(r.Props)
+	return string(b)
+}
+
 // NTN is a Notion implementation backed by the official `ntn` CLI. It is
 // best-effort: Notion writes touch the network and require `ntn login`, so a
 // failure is returned to the caller, which mirrors the durable record in the
@@ -179,6 +217,64 @@ func (n *NTN) CreatePage(ctx context.Context, title, markdown string) (string, s
 		return "", "", err
 	}
 	return extractID(out), "", nil
+}
+
+// Query reads rows back from a Notion database via `ntn datasources rows query`.
+// Like CreateRow, the exact ntn flags may evolve; it routes through one place so
+// the contract is easy to adjust, and parses the output tolerantly. This is the
+// path that lets the agent recall prior hunts, intel, and detections so each
+// hunt compounds on the last rather than repeating settled ground.
+func (n *NTN) Query(ctx context.Context, db, query string, limit int) ([]Row, error) {
+	args := []string{"datasources", "rows", "query", "--datasource", db}
+	if query != "" {
+		args = append(args, "--query", query)
+	}
+	if limit > 0 {
+		args = append(args, "--limit", strconv.Itoa(limit))
+	}
+	out, err := n.run(ctx, args...)
+	if err != nil {
+		return nil, err
+	}
+	return parseRows(db, out), nil
+}
+
+// parseRows extracts rows from ntn query output, tolerating either a bare JSON
+// array of rows or an object with a "results" array, and either inline
+// properties or a nested "properties" object.
+func parseRows(db, out string) []Row {
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return nil
+	}
+	var obj struct {
+		Results []map[string]any `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(out), &obj); err == nil && obj.Results != nil {
+		return rowsFromMaps(db, obj.Results)
+	}
+	var arr []map[string]any
+	if err := json.Unmarshal([]byte(out), &arr); err == nil {
+		return rowsFromMaps(db, arr)
+	}
+	return nil
+}
+
+func rowsFromMaps(db string, ms []map[string]any) []Row {
+	out := make([]Row, 0, len(ms))
+	for _, m := range ms {
+		r := Row{DB: db}
+		if id, ok := m["id"].(string); ok {
+			r.ID = id
+		}
+		if props, ok := m["properties"].(map[string]any); ok {
+			r.Props = props
+		} else {
+			r.Props = m
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 // extractID pulls an "id" field out of ntn JSON output, tolerating plain text.
