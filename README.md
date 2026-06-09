@@ -1,7 +1,6 @@
 <h1 align="center">vala</h1>
 
 <p align="center">
-  <a href="https://github.com/brittonhayes/vala/releases"><img src="https://img.shields.io/github/release/brittonhayes/vala.svg" alt="Latest Release"></a>
   <a href="https://pkg.go.dev/github.com/brittonhayes/vala"><img src="https://pkg.go.dev/badge/github.com/brittonhayes/vala.svg" alt="Go Reference"></a>
   <a href="https://github.com/brittonhayes/vala/actions/workflows/ci.yml"><img src="https://github.com/brittonhayes/vala/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
@@ -21,7 +20,7 @@ Point it at your data lake, describe the work, and walk away. Every hunt, every
 finding, every detection lands in a Notion-backed brain so the next hunt builds
 on the last. It runs on Anthropic's Claude and needs **no external detection
 toolchain** — Sigma rules are validated and unit-tested offline, inside the
-binary. No `sigma-cli`, no `yq`, no Python.
+binary.
 
 ## Install
 
