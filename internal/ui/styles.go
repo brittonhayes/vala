@@ -24,6 +24,12 @@ type Styles struct {
 	InputBoxBusy lipgloss.Style
 	Queued       lipgloss.Style
 	User         lipgloss.Style
+
+	// Permission styles are deliberately high-contrast so an approval request is
+	// impossible to miss against the dim transcript.
+	Permission    lipgloss.Style
+	PermissionKey lipgloss.Style
+	Mode          lipgloss.Style
 }
 
 // DefaultStyles returns the vala color palette.
@@ -49,5 +55,9 @@ func DefaultStyles() Styles {
 		InputBoxBusy: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("#7D56F4")).Padding(0, 1),
 		Queued:       lipgloss.NewStyle().Foreground(lipgloss.Color("#FFB454")),
 		User:         lipgloss.NewStyle().Foreground(lipgloss.Color("#E6E6E6")),
+
+		Permission:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")),
+		PermissionKey: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#B197FC")),
+		Mode:          lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#B197FC")),
 	}
 }

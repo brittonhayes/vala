@@ -20,6 +20,10 @@ import (
 // spinnerFrames is a smooth braille cycle that reads as continuous motion.
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
+// maxInputLines caps how tall the input box grows as text wraps before it
+// starts to scroll internally, mirroring Claude Code's expanding composer.
+const maxInputLines = 10
+
 // --- messages forwarded from the agent goroutine into the event loop ---
 
 type assistantMsg string
@@ -73,7 +77,7 @@ func newChatModel(r *REPL) chatModel {
 	ta.Prompt = "› "
 	ta.ShowLineNumbers = false
 	ta.CharLimit = 0
-	ta.MaxHeight = 6
+	ta.MaxHeight = maxInputLines
 	ta.SetHeight(1)
 	// Keep the input visually flat; the surrounding box provides the frame.
 	ta.FocusedStyle.Base = lipgloss.NewStyle()
@@ -199,6 +203,11 @@ func (m chatModel) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "enter":
 		return m.submit()
+	case "shift+tab":
+		// Cycle the permission disposition (ask → allow → deny) without leaving
+		// the session. The footer reflects the new mode immediately.
+		m.repl.Gate.CycleMode()
+		return m, nil
 	case "pgup", "pgdown", "ctrl+u", "ctrl+d":
 		var cmd tea.Cmd
 		m.vp, cmd = m.vp.Update(msg)
@@ -327,7 +336,7 @@ func (m chatModel) View() string {
 // permission request when one is pending, or a blank spacer when idle.
 func (m chatModel) statusLine() string {
 	if m.perm != nil {
-		line := "  " + m.styles.Denied.Render("permission needed") + "  " + m.styles.ToolCall.Render(m.perm.name)
+		line := "  " + m.styles.Permission.Render("permission needed") + "  " + m.styles.ToolCall.Render(m.perm.name)
 		if s := oneLine(m.perm.summary, 72); s != "" {
 			line += "  " + m.styles.ToolMeta.Render(s)
 		}
@@ -349,13 +358,26 @@ func (m chatModel) statusLine() string {
 
 func (m chatModel) footer() string {
 	if m.perm != nil {
-		return "  " + m.styles.Hint.Render("[y]es  ·  [n]o  ·  [a]lways allow this tool")
+		return "  " + m.styles.PermissionKey.Render("[y]es  ·  [n]o  ·  [a]lways allow this tool")
 	}
 	hint := "enter send · ctrl+j newline · ↑/pgup scroll · ctrl+c quit"
 	if m.running {
 		hint = "type to queue · enter send · esc interrupt · ctrl+c quit"
 	}
-	return "  " + m.styles.Hint.Render(hint)
+	mode := m.styles.Mode.Render("shift+tab perms: " + m.modeLabel())
+	return "  " + m.styles.Hint.Render(hint) + "  " + mode
+}
+
+// modeLabel renders the gate's current permission disposition for the footer.
+func (m chatModel) modeLabel() string {
+	switch string(m.repl.Gate.Mode) {
+	case "allow":
+		return "auto-allow"
+	case "deny":
+		return "deny-all"
+	default:
+		return "ask"
+	}
 }
 
 // banner is the curated session header, rendered as the first transcript block.
@@ -420,17 +442,21 @@ func (m *chatModel) relayout() {
 	if !m.ready {
 		return
 	}
-	lines := m.ta.LineCount()
-	if lines < 1 {
-		lines = 1
-	}
-	if lines > 6 {
-		lines = 6
-	}
-	m.ta.SetHeight(lines)
+	m.ta.SetHeight(m.inputLines())
 	m.vp.Width = m.width
 	m.vp.Height = m.viewportHeight()
 	m.refreshViewport()
+}
+
+// inputLines is the on-screen height of the input box: the number of rows the
+// current value wraps to, clamped to maxInputLines. It counts soft-wrapped rows
+// (not just hard newlines) so long text expands the box like Claude Code.
+func (m chatModel) inputLines() int {
+	lines := inputRows(m.ta.Value(), m.ta.Width())
+	if lines > maxInputLines {
+		lines = maxInputLines
+	}
+	return lines
 }
 
 // viewportHeight returns the rows available for the transcript after reserving
@@ -438,12 +464,7 @@ func (m *chatModel) relayout() {
 func (m chatModel) viewportHeight() int {
 	lines := 1
 	if m.ready {
-		if lc := m.ta.LineCount(); lc > lines {
-			lines = lc
-		}
-		if lines > 6 {
-			lines = 6
-		}
+		lines = m.inputLines()
 	}
 	inputBox := lines + 2                       // rounded border top and bottom
 	h := m.height - inputBox - 1 /*status*/ - 1 /*footer*/

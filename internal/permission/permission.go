@@ -36,6 +36,20 @@ func Parse(s string) Mode {
 	}
 }
 
+// NextMode returns the mode following m in the ask → allow → deny → ask cycle.
+// It backs the interactive shift+tab toggle so an operator can loosen or tighten
+// approval without restarting the session.
+func NextMode(m Mode) Mode {
+	switch m {
+	case ModeAsk:
+		return ModeAllow
+	case ModeAllow:
+		return ModeDeny
+	default:
+		return ModeAsk
+	}
+}
+
 // Prompter asks the operator to approve a single call. It receives the tool
 // name and a short human summary of the call and returns true to allow it.
 type Prompter func(tool, summary string) bool
@@ -133,6 +147,12 @@ func (g *Gate) Decide(req governance.Request, led *governance.Ledger) governance
 
 func deny(format string, args ...any) governance.Decision {
 	return governance.Decision{Allow: false, Reason: fmt.Sprintf(format, args...)}
+}
+
+// CycleMode advances the gate to the next permission mode and returns it.
+func (g *Gate) CycleMode() Mode {
+	g.Mode = NextMode(g.Mode)
+	return g.Mode
 }
 
 // AllowTool adds a tool to the allowlist for the remainder of the session,
