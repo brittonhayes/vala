@@ -59,8 +59,11 @@ each hunt compound on the last. `queue_hunt` records a trigger (intel, a hunch, 
 fresh CVE, a past incident) on a prioritized **backlog**.
 
 **2 · Hunt.** `open_hunt` starts a hypothesis-driven hunt. vala explores
-read-only data sources, recording each fact as an immutable Finding pointer and
-each indicator, TTP, or actor as a first-class artifact.
+read-only data sources over the Model Context Protocol — point it at a
+[Scanner](https://scanner.dev) data lake and it discovers the available indexes
+and fields (`scanner_load_context`), then queries them (`scanner_execute_query`),
+recording each fact as an immutable Finding pointer and each indicator, TTP, or
+actor as a first-class artifact.
 
 **3 · Conclude.** `store_hunt` writes the narrative page with a Confirmed,
 Refuted, or Inconclusive verdict. Every declarative finding must cite a Finding
@@ -131,7 +134,7 @@ and the `1 of` / `all of` quantifiers. The embedded reference rules under
 Settings layer (lowest priority first): built-in defaults →
 `~/.config/vala/config.json` → `./.vala.json` → environment variables
 (`ANTHROPIC_API_KEY`, `VALA_MODEL`, `VALA_PERMISSION`, `VALA_ENV`,
-`SLACK_WEBHOOK_URL`).
+`SLACK_WEBHOOK_URL`, `SCANNER_MCP_URL`, `SCANNER_API_KEY`).
 
 ```json
 {
@@ -139,6 +142,9 @@ Settings layer (lowest priority first): built-in defaults →
   "permission": "ask",
   "detections_dir": "detections",
   "env": "dev",
+  "mcp": [
+    { "name": "scanner", "url": "https://<your>.scanner.dev/mcp", "api_key_env": "SCANNER_API_KEY" }
+  ],
   "notion": {
     "alerts": "", "cases": "", "evidence": "", "actions": "", "runs": "",
     "hunts": "", "intel": "", "detections": "", "backlog": "",
@@ -146,6 +152,21 @@ Settings layer (lowest priority first): built-in defaults →
   }
 }
 ```
+
+### Evidence sources (MCP)
+
+vala's evidence comes from [Model Context Protocol](https://modelcontextprotocol.io)
+servers listed under `mcp`. Each server is dialed at startup over streamable
+HTTP, its tools are discovered, and the read-only ones are exposed to the agent
+during investigation and hunts; its bearer token is read from the environment
+variable named by `api_key_env`, never persisted. The reference source is
+[Scanner](https://scanner.dev), whose inverted indexes make exploratory queries
+fast and cheap: `scanner_load_context` discovers indexes and fields,
+`scanner_execute_query` runs an ad-hoc query, and `scanner_get_query_results`
+pages rows without flooding the model's context. As a shortcut, setting
+`SCANNER_MCP_URL` (plus `SCANNER_API_KEY`) registers Scanner without a config
+file. With no MCP server configured, vala has no remote evidence source and can
+only reason over local files.
 
 `env` selects the policy environment (`dev`/`prod`). The `notion` values are
 **data-source IDs** (resolve a database ID with `ntn datasources resolve <id>`);

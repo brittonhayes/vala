@@ -33,6 +33,10 @@ type Engine struct {
 	Webhook          string
 	MaxStepsPerPhase int
 
+	// EvidenceTools are the discovered MCP evidence tools (e.g. Scanner's query
+	// and discovery tools) exposed to the read-only investigation phases.
+	EvidenceTools []tool.Tool
+
 	// Approver decides a proposed action that policy does not auto-approve. If
 	// nil, only policy-auto-approved actions are approved (everything else is
 	// denied) — the safe default for unattended runs.
@@ -71,7 +75,7 @@ func (e *Engine) RunCase(ctx context.Context, alert brain.Alert, title string) (
 
 	ledger := governance.NewLedger()
 	rc := tools.NewRunContext(e.Env, caseID, e.Brain, ledger, e.Policy)
-	registry := tools.GovernedRegistry(e.Dir, rc, e.Webhook)
+	registry := tools.GovernedRegistry(e.Dir, rc, e.Webhook, e.EvidenceTools...)
 	ag := agent.New(e.Client, registry, e.Gate, e.Dir, maxSteps)
 
 	res := &Result{CaseID: caseID, RunID: runID, PhaseReached: governance.PhasePlan}

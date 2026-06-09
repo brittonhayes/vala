@@ -7,8 +7,9 @@ brain and lets `record_finding` and `store_hunt` write to it. Pass the `question
 you start. If the hunt came off the backlog, pass its `backlog_id` so the item is
 marked Opened and linked.
 
-After opening: investigate with read-only tools (`log_search`, `read`, `grep`,
-`glob`), record each fact you rely on with `record_finding` (cite the returned
+After opening: investigate with read-only tools (`scanner_execute_query` against
+the Scanner data lake when connected, plus `read`, `grep`, `glob`), record each
+fact you rely on with `record_finding` (cite the returned
 ID), surface reusable intel with `record_intel`, then call `store_hunt` once with
 a Confirmed / Refuted / Inconclusive verdict. On a Confirmed hunt, the deliverable
 is a detection: author a Sigma rule for the proven behavior and link it.

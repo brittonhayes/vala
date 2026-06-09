@@ -12,6 +12,7 @@ import (
 	"github.com/brittonhayes/vala/internal/permission"
 	"github.com/brittonhayes/vala/internal/policy"
 	"github.com/brittonhayes/vala/internal/respond"
+	"github.com/brittonhayes/vala/internal/tool"
 )
 
 // caseRunner adapts the governed respond engine to the tools.CaseRunner the
@@ -20,11 +21,12 @@ import (
 // exactly as it did for the old `vala respond` command — just reached through a
 // tool now instead of a top-level command.
 type caseRunner struct {
-	cfg    config.Config
-	cwd    string
-	client *llm.Client
-	gate   *permission.Gate
-	policy *policy.Set
+	cfg      config.Config
+	cwd      string
+	client   *llm.Client
+	gate     *permission.Gate
+	policy   *policy.Set
+	evidence []tool.Tool
 }
 
 // RunCase walks an alert through the governed loop and returns a summary string
@@ -32,14 +34,15 @@ type caseRunner struct {
 func (cr *caseRunner) RunCase(ctx context.Context, alert brain.Alert, title string) (string, error) {
 	store := brainStore(cr.cfg, cr.cwd)
 	eng := &respond.Engine{
-		Client:  cr.client,
-		Gate:    cr.gate,
-		Brain:   brain.New(store),
-		Policy:  cr.policy,
-		Env:     cr.cfg.Env,
-		Dir:     cr.cwd,
-		Commit:  gitCommit(cr.cwd),
-		Webhook: cr.cfg.SlackWebhook,
+		Client:        cr.client,
+		Gate:          cr.gate,
+		Brain:         brain.New(store),
+		Policy:        cr.policy,
+		Env:           cr.cfg.Env,
+		Dir:           cr.cwd,
+		Commit:        gitCommit(cr.cwd),
+		Webhook:       cr.cfg.SlackWebhook,
+		EvidenceTools: cr.evidence,
 	}
 	res, err := eng.RunCase(ctx, alert, title)
 	if err != nil {

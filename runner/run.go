@@ -8,12 +8,38 @@ import (
 
 	"github.com/brittonhayes/vala/internal/brain"
 	"github.com/brittonhayes/vala/internal/governance"
+	"github.com/brittonhayes/vala/internal/mcp"
 	"github.com/brittonhayes/vala/internal/permission"
 	"github.com/brittonhayes/vala/internal/policy"
 	"github.com/brittonhayes/vala/internal/respond"
 	"github.com/brittonhayes/vala/internal/tool"
 	"github.com/brittonhayes/vala/internal/tools"
 )
+
+// scannerEvidence builds the fake Scanner MCP evidence tools used by the
+// harness. scanner_execute_query returns the fixture's mock log events as JSON;
+// the returned names are the read-only tools to classify in policy.
+func scannerEvidence(logs []map[string]any) ([]tool.Tool, []string) {
+	sess := &mcp.FakeSession{
+		ServerName: "scanner",
+		Tools: []mcp.ToolDesc{{
+			Name:        "execute_query",
+			Description: "Run an ad-hoc query against the Scanner data lake.",
+			Properties:  map[string]any{"query": map[string]any{"type": "string"}},
+			Required:    []string{"query"},
+			ReadOnly:    true,
+		}},
+		OnCall: func(string, json.RawMessage) (mcp.CallResult, error) {
+			body, _ := json.Marshal(map[string]any{"count": len(logs), "results": logs})
+			return mcp.CallResult{Text: string(body)}, nil
+		},
+	}
+	evidence, readOnly, err := tools.MCPToolsFrom(context.Background(), sess)
+	if err != nil {
+		panic(err) // a fake session never fails to list tools
+	}
+	return evidence, readOnly
+}
 
 // Outcome is the result of replaying one fixture.
 type Outcome struct {
@@ -53,10 +79,14 @@ func RunFixture(ctx context.Context, fx Fixture) Outcome {
 	rc := tools.NewRunContext(env, caseID, bc, ledger, pol)
 	rc.Notifier = &memNotifier{}
 
-	logs := fx.MockLogs
 	reg := tool.NewRegistry()
+	// A fake Scanner MCP session is the evidence source: scanner_execute_query
+	// returns the fixture's mock logs deterministically, exercising the same MCP
+	// adapter the live integration uses.
+	scanner, scannerReadOnly := scannerEvidence(fx.MockLogs)
+	pol.ClassifyRead(scannerReadOnly...)
+	reg.Register(scanner...)
 	reg.Register(
-		&tools.LogSearch{Search: func(string) []map[string]any { return logs }},
 		&tools.RecordEvidence{RC: rc},
 		&tools.ProposeAction{RC: rc},
 		&tools.SubmitForApproval{RC: rc},
