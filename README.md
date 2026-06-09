@@ -147,10 +147,14 @@ Settings layer (lowest priority first): built-in defaults →
 }
 ```
 
-`env` selects the policy environment (`dev`/`prod`). Notion database IDs enable
-real Notion writes; leave them empty to run in local mode. Every non-read-only
-tool call is gated by `--permission`: `ask` (default) prompts per call, `allow`
-auto-approves for unattended runs, `deny` blocks all writes.
+`env` selects the policy environment (`dev`/`prod`). The `notion` values are
+**data-source IDs** (resolve a database ID with `ntn datasources resolve <id>`);
+set them to enable real Notion reads and writes, or leave them empty to run in
+local mode. vala reads each data source's schema and types properties to match,
+so each data source's property names should match the field keys vala writes
+(`hunt_id`, `status`, `started_at`, relations like `hunts`/`detections`, …).
+Every non-read-only tool call is gated by `--permission`: `ask` (default) prompts
+per call, `allow` auto-approves for unattended runs, `deny` blocks all writes.
 
 ## Development
 

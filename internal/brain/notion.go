@@ -149,10 +149,19 @@ func rowText(r *Row) string {
 // best-effort: Notion writes touch the network and require `ntn login`, so a
 // failure is returned to the caller, which mirrors the durable record in the
 // local session transcript regardless.
+//
+// Rows are Notion pages in a data source. Because the Notion API requires typed
+// property objects matched to the target schema by name, NTN fetches each data
+// source's schema (property name -> type) and coerces the brain's flat props to
+// typed values. The configured DB IDs are treated as data-source IDs; the
+// brain's prop keys are expected to match the Notion property names.
 type NTN struct {
 	Bin string // defaults to "ntn"
 	Dir string
-	DBs DBIDs // database IDs from config
+	DBs DBIDs // data-source IDs from config
+
+	mu      sync.Mutex
+	schemas map[string]map[string]string // data-source ID -> (property name -> type)
 }
 
 // DBIDs holds the Notion database IDs the brain writes to.
@@ -191,32 +200,258 @@ func (n *NTN) run(ctx context.Context, args ...string) (string, error) {
 	return out.String(), nil
 }
 
-// CreateRow creates a row by calling `ntn datasources rows create` with a JSON
-// properties payload. The exact ntn flags may evolve; this routes through one
-// place so the contract is easy to adjust.
+// runOut runs ntn capturing stdout separately from stderr, so JSON responses
+// parse cleanly and the error carries ntn's diagnostic text.
+func (n *NTN) runOut(ctx context.Context, args ...string) ([]byte, error) {
+	if _, err := exec.LookPath(n.bin()); err != nil {
+		return nil, fmt.Errorf("ntn CLI not available: %w", err)
+	}
+	cmd := exec.CommandContext(ctx, n.bin(), args...)
+	cmd.Dir = n.Dir
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("ntn %v: %w: %s", args, err, strings.TrimSpace(stderr.String()))
+	}
+	return stdout.Bytes(), nil
+}
+
+// CreateRow creates a row (a page in a data source) via `POST /v1/pages`. It
+// fetches the data source's schema to type each property, then sends the typed
+// payload through `ntn api`. db is a data-source ID.
 func (n *NTN) CreateRow(ctx context.Context, db string, props map[string]any) (string, error) {
-	payload, _ := json.Marshal(props)
-	out, err := n.run(ctx, "datasources", "rows", "create", "--datasource", db, "--properties", string(payload))
+	schema, err := n.schema(ctx, db)
 	if err != nil {
 		return "", err
 	}
-	return extractID(out), nil
+	body := map[string]any{
+		"parent":     map[string]any{"type": "data_source_id", "data_source_id": db},
+		"properties": toProperties(schema, props),
+	}
+	out, err := n.api(ctx, "POST", "/v1/pages", body)
+	if err != nil {
+		return "", err
+	}
+	return extractID(string(out)), nil
 }
 
-// UpdateRow patches a row.
+// UpdateRow patches a row's properties via `PATCH /v1/pages/{id}`. The row's
+// data source (and thus its schema) is discovered from the page's parent so
+// properties can be typed.
 func (n *NTN) UpdateRow(ctx context.Context, id string, props map[string]any) error {
-	payload, _ := json.Marshal(props)
-	_, err := n.run(ctx, "datasources", "rows", "update", "--id", id, "--properties", string(payload))
+	dsID, err := n.pageDataSource(ctx, id)
+	if err != nil {
+		return err
+	}
+	schema, err := n.schema(ctx, dsID)
+	if err != nil {
+		return err
+	}
+	body := map[string]any{"properties": toProperties(schema, props)}
+	_, err = n.api(ctx, "PATCH", "/v1/pages/"+id, body)
 	return err
 }
 
-// CreatePage creates a markdown page under the configured parent.
+// CreatePage creates a narrative markdown page under the configured parent page.
+// `ntn pages create` derives the page title from the Markdown's leading heading,
+// so we ensure the content opens with one rather than passing a (non-existent)
+// --title flag.
 func (n *NTN) CreatePage(ctx context.Context, title, markdown string) (string, string, error) {
-	out, err := n.run(ctx, "pages", "create", "--parent", n.DBs.Parent, "--title", title, "--content", markdown)
+	content := markdown
+	if title != "" && !strings.HasPrefix(strings.TrimSpace(content), "#") {
+		content = "# " + title + "\n\n" + markdown
+	}
+	args := []string{"pages", "create", "--content", content, "--json"}
+	if n.DBs.Parent != "" {
+		args = append(args, "--parent", "page:"+n.DBs.Parent)
+	}
+	out, err := n.runOut(ctx, args...)
 	if err != nil {
 		return "", "", err
 	}
-	return extractID(out), "", nil
+	return extractID(string(out)), extractField(string(out), "url"), nil
+}
+
+// api calls a Notion API endpoint through `ntn api`, sending body (if non-nil)
+// as the JSON request body. It returns the raw response bytes.
+func (n *NTN) api(ctx context.Context, method, path string, body any) ([]byte, error) {
+	args := []string{"api", path, "-X", method}
+	if body != nil {
+		payload, err := json.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, "-d", string(payload))
+	}
+	return n.runOut(ctx, args...)
+}
+
+// schema returns a data source's property-name -> type map, fetched once via
+// `GET /v1/data_sources/{id}` and cached for the life of the store.
+func (n *NTN) schema(ctx context.Context, dsID string) (map[string]string, error) {
+	n.mu.Lock()
+	if s, ok := n.schemas[dsID]; ok {
+		n.mu.Unlock()
+		return s, nil
+	}
+	n.mu.Unlock()
+
+	out, err := n.api(ctx, "GET", "/v1/data_sources/"+dsID, nil)
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Properties map[string]struct {
+			Type string `json:"type"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return nil, fmt.Errorf("parse data source schema: %w", err)
+	}
+	s := make(map[string]string, len(resp.Properties))
+	for name, p := range resp.Properties {
+		s[name] = p.Type
+	}
+	n.mu.Lock()
+	if n.schemas == nil {
+		n.schemas = map[string]map[string]string{}
+	}
+	n.schemas[dsID] = s
+	n.mu.Unlock()
+	return s, nil
+}
+
+// pageDataSource returns the data-source ID a page belongs to, read from its
+// parent via `GET /v1/pages/{id}`.
+func (n *NTN) pageDataSource(ctx context.Context, id string) (string, error) {
+	out, err := n.api(ctx, "GET", "/v1/pages/"+id, nil)
+	if err != nil {
+		return "", err
+	}
+	var resp struct {
+		Parent struct {
+			DataSourceID string `json:"data_source_id"`
+			DatabaseID   string `json:"database_id"`
+		} `json:"parent"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return "", fmt.Errorf("parse page parent: %w", err)
+	}
+	if resp.Parent.DataSourceID != "" {
+		return resp.Parent.DataSourceID, nil
+	}
+	return resp.Parent.DatabaseID, nil
+}
+
+// toProperties coerces the brain's flat props into Notion typed property values,
+// keyed by the data source's property names. Props with no matching schema
+// property are skipped, and nil values are omitted.
+func toProperties(schema map[string]string, props map[string]any) map[string]any {
+	out := make(map[string]any)
+	for name, typ := range schema {
+		v, ok := props[name]
+		if !ok || v == nil {
+			continue
+		}
+		if pv := typedValue(typ, v); pv != nil {
+			out[name] = pv
+		}
+	}
+	return out
+}
+
+// typedValue wraps a flat value in the Notion property shape for its type. It
+// covers the property types the brain writes; an unknown type falls back to
+// rich_text so data is preserved rather than dropped.
+func typedValue(typ string, v any) any {
+	switch typ {
+	case "title":
+		return map[string]any{"title": richText(fmt.Sprint(v))}
+	case "rich_text":
+		return map[string]any{"rich_text": richText(fmt.Sprint(v))}
+	case "select":
+		s := fmt.Sprint(v)
+		if s == "" {
+			return nil
+		}
+		return map[string]any{"select": map[string]any{"name": s}}
+	case "status":
+		s := fmt.Sprint(v)
+		if s == "" {
+			return nil
+		}
+		return map[string]any{"status": map[string]any{"name": s}}
+	case "multi_select":
+		return map[string]any{"multi_select": namedList(v)}
+	case "date":
+		s := fmt.Sprint(v)
+		if s == "" {
+			return nil
+		}
+		return map[string]any{"date": map[string]any{"start": s}}
+	case "number":
+		return map[string]any{"number": v}
+	case "checkbox":
+		b, _ := v.(bool)
+		return map[string]any{"checkbox": b}
+	case "url":
+		return map[string]any{"url": fmt.Sprint(v)}
+	case "email":
+		return map[string]any{"email": fmt.Sprint(v)}
+	case "relation":
+		return map[string]any{"relation": idList(v)}
+	default:
+		return map[string]any{"rich_text": richText(fmt.Sprint(v))}
+	}
+}
+
+// richText renders a string as a Notion rich-text array (empty for "").
+func richText(s string) []any {
+	if s == "" {
+		return []any{}
+	}
+	return []any{map[string]any{"type": "text", "text": map[string]any{"content": s}}}
+}
+
+// asStrings normalizes a string, []string, or []any value to a string slice.
+func asStrings(v any) []string {
+	switch t := v.(type) {
+	case []string:
+		return t
+	case string:
+		if t == "" {
+			return nil
+		}
+		return []string{t}
+	case []any:
+		out := make([]string, 0, len(t))
+		for _, e := range t {
+			out = append(out, fmt.Sprint(e))
+		}
+		return out
+	}
+	return nil
+}
+
+// namedList renders values as Notion {name} objects (multi_select).
+func namedList(v any) []any {
+	ss := asStrings(v)
+	out := make([]any, 0, len(ss))
+	for _, s := range ss {
+		out = append(out, map[string]any{"name": s})
+	}
+	return out
+}
+
+// idList renders values as Notion {id} objects (relation).
+func idList(v any) []any {
+	ss := asStrings(v)
+	out := make([]any, 0, len(ss))
+	for _, s := range ss {
+		out = append(out, map[string]any{"id": s})
+	}
+	return out
 }
 
 // Query reads rows back from a Notion data source via `ntn datasources query`.
@@ -239,11 +474,11 @@ func (n *NTN) Query(ctx context.Context, db, query string, limit int) ([]Row, er
 	if fetch > 0 {
 		args = append(args, "--limit", strconv.Itoa(fetch))
 	}
-	out, err := n.run(ctx, args...)
+	out, err := n.runOut(ctx, args...)
 	if err != nil {
 		return nil, err
 	}
-	rows := filterRows(parseRows(db, out), query)
+	rows := filterRows(parseRows(db, string(out)), query)
 	if limit > 0 && len(rows) > limit {
 		rows = rows[:limit]
 	}
@@ -309,11 +544,15 @@ func rowsFromMaps(db string, ms []map[string]any) []Row {
 }
 
 // extractID pulls an "id" field out of ntn JSON output, tolerating plain text.
-func extractID(out string) string {
+func extractID(out string) string { return extractField(out, "id") }
+
+// extractField pulls a top-level string field out of ntn JSON output,
+// tolerating non-JSON text (returns "").
+func extractField(out, field string) string {
 	var m map[string]any
 	if err := json.Unmarshal([]byte(out), &m); err == nil {
-		if id, ok := m["id"].(string); ok {
-			return id
+		if v, ok := m[field].(string); ok {
+			return v
 		}
 	}
 	return ""
