@@ -193,15 +193,14 @@ per call, `allow` auto-approves for unattended runs, `deny` blocks all writes.
 go build ./...
 go vet ./...
 go test ./...
-go run ./cmd/vala harness --fixtures tests
 ```
 
-CI runs build, vet, `go test -race`, the adversarial harness (diffed against
-`runner/baseline.json`), and a `gofmt` check on every push and pull request.
+CI runs build, vet, `go test -race`, and a `gofmt` check on every push and pull
+request.
 
 The architecture follows [charmbracelet/crush](https://github.com/charmbracelet/crush)
 (one `Tool` type + one embedded `.md` description per tool, a permission gate,
-sessions). The tool registry (`internal/tools/default.go`) is the single
+sessions). The tool registry (`internal/tools/toolbox.go`) is the single
 extension point.
 
 ## License
