@@ -1,121 +1,132 @@
-# vala
+<h1 align="center">vala</h1>
 
-An agentic threat-hunting system in a single Go binary.
+<p align="center">
+  <a href="https://github.com/brittonhayes/vala/releases"><img src="https://img.shields.io/github/release/brittonhayes/vala.svg" alt="Latest Release"></a>
+  <a href="https://pkg.go.dev/github.com/brittonhayes/vala"><img src="https://pkg.go.dev/badge/github.com/brittonhayes/vala.svg" alt="Go Reference"></a>
+  <a href="https://github.com/brittonhayes/vala/actions/workflows/ci.yml"><img src="https://github.com/brittonhayes/vala/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
+</p>
 
-vala runs one loop: scope a hypothesis, hunt it, reach a verdict, and write the
-detection a confirmed hunt warrants. Every step is recorded in Notion.
+<p align="center">A threat hunter that lives in your terminal. One binary, one loop: scope a hypothesis, hunt it down, reach a verdict, ship the detection.</p>
 
-It runs on Anthropic's Claude and needs no external detection toolchain: Sigma
-rules are validated and unit-tested offline, inside the binary — no `sigma-cli`,
-no `yq`, no Python.
+```
+  vala  security detection & response · claude-opus-4-8
+  type a request · /help for commands · "exit" to quit
+  ────────────────────────────────────────────────────
+  › a CISA advisory says GuardDuty is being disabled — hunt the last 24h
+  › confirmed. author and link a Sigma detection for DeleteDetector
+```
 
-## Quickstart
+Point it at your data lake, describe the work, and walk away. Every hunt, every
+finding, every detection lands in a Notion-backed brain so the next hunt builds
+on the last. It runs on Anthropic's Claude and needs **no external detection
+toolchain** — Sigma rules are validated and unit-tested offline, inside the
+binary. No `sigma-cli`, no `yq`, no Python.
+
+## Install
 
 ```sh
 go install github.com/brittonhayes/vala/cmd/vala@latest
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-Provision the Notion-backed brain once, so your hunts, intel, evidence, and
-detections persist instead of living in an ephemeral in-memory store. This needs
-an authenticated [Notion CLI](https://github.com/makenotion/ntn) (`ntn login`):
+<details>
+<summary>Build from source</summary>
 
 ```sh
-vala init --parent <notion-page-id>
+git clone https://github.com/brittonhayes/vala && cd vala
+go build -o vala ./cmd/vala
 ```
 
-`init` creates the brain's databases under that page and writes their data-source
-IDs into `.vala.json`. It is idempotent — re-running verifies and reuses the
-existing databases rather than duplicating them. Until you run it, vala warns on
-startup that it is in ephemeral in-memory mode (suppress with `--no-init-prompt`).
+</details>
 
-vala has a single surface: an interactive session. Start it and describe the
-work:
+## Quickstart
+
+Fire up the session and start talking:
 
 ```sh
 vala
 ```
 
-```
-› queue a hunt: a CISA advisory says GuardDuty is being disabled — behavior
-  DeleteDetector, data source cloudtrail
-› hunt whether anyone disabled GuardDuty in the last 24h, and store the hunt
-› now that it's confirmed, author and link a Sigma detection for that behavior
-```
+That's the whole surface — one interactive session. Three slash commands steer
+the conversation itself:
 
-Inside the session, a few slash commands manage the conversation itself rather
-than the agent:
-
-| Command | Effect |
+| Command | What it does |
 | --- | --- |
-| `/help` | List the available commands. |
-| `/clear` | Clear the conversation context and transcript, keeping the banner. |
-| `/compact [focus]` | Summarize the conversation into a structured recap and continue with far fewer tokens; optional `focus` text steers the summary. |
+| `/help` | List the commands. |
+| `/clear` | Wipe the context and transcript, keep the banner. |
+| `/compact [focus]` | Summarize the session into a tight recap and keep going; `focus` steers it. |
 
-vala also compacts optimistically on its own: when a turn's prompt approaches the
-context window (80% by default), it summarizes before continuing so long sessions
-don't run out of room. Tune this with `context_window` / `auto_compact_threshold`
-(or `VALA_CONTEXT_WINDOW` / `VALA_AUTO_COMPACT_THRESHOLD`); set either to `0` to
-disable auto-compaction.
-
-Run a one-shot task non-interactively (same toolbox, no TTY):
+Need a one-shot for CI or a cron? Same toolbox, no TTY:
 
 ```sh
-vala run "validate and test every rule in my detections directory, and report failures"
+vala run "validate and test every rule in my detections directory, report failures"
 ```
 
-Common flags: `--model <id>`, `--permission ask|allow|deny`, `--yes`.
+> [!TIP]
+> Common flags: `--model <id>`, `--permission ask|allow|deny`, `--yes`.
+> vala also auto-compacts as a turn approaches the context window (80% by
+> default) so long sessions never run out of room — tune it with
+> `context_window` / `auto_compact_threshold`, or set either to `0` to turn it off.
 
-> **Build from source:** `git clone https://github.com/brittonhayes/vala && cd
-> vala && go build -o vala ./cmd/vala`
+## Give it a brain
+
+By default vala runs in ephemeral, in-memory mode — fine for a quick look,
+forgotten the moment you quit. Wire it to Notion once and your hunts, intel,
+evidence, and detections persist as one connected graph:
+
+```sh
+vala init --parent <notion-page-id>
+```
+
+`init` provisions the brain's databases under that page and writes their
+data-source IDs into `.vala.json`. It's idempotent — re-run it any time to
+verify and reuse what's there rather than duplicating it.
+
+> [!NOTE]
+> `init` needs an authenticated [Notion CLI](https://github.com/makenotion/ntn)
+> (`ntn login`). Until you run it, vala reminds you on startup that it's in
+> memory-only mode (silence it with `--no-init-prompt`).
 
 ## The hunt loop
 
-vala runs one loop, following the shape established hunt frameworks share
-(Sqrrl's Hunting Loop, Splunk PEAK, TaHiTI). See
-[`docs/threat-hunting-system.md`](docs/threat-hunting-system.md) for the
-rationale.
+vala runs a single loop, shaped after the frameworks every hunt team knows —
+Sqrrl's Hunting Loop, Splunk PEAK, TaHiTI. The rationale lives in
+[`docs/threat-hunting-system.md`](docs/threat-hunting-system.md).
 
 **1 · Scope.** State the hypothesis with ABLE — the testable adversary
-**B**ehavior and the data-source **L**ocation where it would appear. `recall`
-reads the brain back first — prior hunts, intel, and detections — so settled
-ground isn't re-hunted and related intel is pulled forward; this is what makes
-each hunt compound on the last. `queue_hunt` records a trigger (intel, a hunch, a
-fresh CVE, a past incident) on a prioritized **backlog**.
+**B**ehavior and the data-source **L**ocation where it'd show up. `recall` reads
+the brain back first, so settled ground isn't re-hunted and related intel gets
+pulled forward. `queue_hunt` drops triggers (intel, a hunch, a fresh CVE, a past
+incident) onto a prioritized backlog.
 
-**2 · Hunt.** `open_hunt` starts a hypothesis-driven hunt. vala explores
-read-only data sources over the Model Context Protocol — point it at a
-[Scanner](https://scanner.dev) data lake and it discovers the available indexes
-and fields (`scanner_load_context`), then queries them (`scanner_execute_query`),
-recording each fact as an immutable Finding pointer and each indicator, TTP, or
-actor as a first-class artifact.
+**2 · Hunt.** `open_hunt` kicks off a hypothesis-driven hunt over read-only data
+sources, spoken via the [Model Context Protocol](https://modelcontextprotocol.io).
+Point it at a [Scanner](https://scanner.dev) data lake and it discovers the
+indexes and fields, queries them, and records each fact as an immutable Finding
+and each indicator, TTP, or actor as a first-class artifact.
 
-**3 · Conclude.** `store_hunt` writes the narrative page with a Confirmed,
-Refuted, or Inconclusive verdict. Every declarative finding must cite a Finding
-ID, or the page is rejected.
+**3 · Conclude.** `store_hunt` writes the narrative page with a verdict —
+**Confirmed**, **Refuted**, or **Inconclusive**. Every declarative finding must
+cite a Finding ID, or the page bounces.
 
-**4 · Automate.** A confirmed hunt produces a detection. vala authors a Sigma
-rule for the proven behavior — study, author, validate, test, document — editing
-one field at a time to preserve comments and key order, checking it against the
-official Sigma JSON schema offline, and running its inline `tests:` through a
-built-in evaluation engine before linking it back to the hunt. A refuted hunt
-produces none. vala ships no detections of its own; point it at your directory
-with `detections_dir` (default `detections`).
-
-In Notion, backlog, intel, hunts, and detections form one connected graph.
+**4 · Automate.** A confirmed hunt earns a detection. vala studies, authors,
+validates, and tests a Sigma rule for the proven behavior — then links it back
+to the hunt. A refuted hunt earns none.
 
 ## Detections
 
 A confirmed hunt's output is a [Sigma](https://sigmahq.io) rule — vendor-neutral
-detection-as-code that converts to most SIEM backends. vala writes it to your
-`detections_dir` and leaves deployment to your pipeline.
+detection-as-code that compiles to most SIEM backends. vala writes it to your
+`detections_dir` (default `detections`) and leaves deployment to your pipeline.
+It ships none of its own.
 
-It populates two optional, schema-valid fields so the rule stands on its own:
+Two optional, schema-valid fields make each rule stand on its own:
 
 - **`runbook:`** — inline response guidance (`triage`, `investigate`, `contain`,
   `escalate`, `references`).
 - **`tests:`** — `{name, event, match}` cases vala runs through its offline
-  evaluation engine to check the rule's logic.
+  engine to prove the rule's logic.
 
 ```yaml
 detection:
@@ -132,15 +143,16 @@ tests:
     match: false
 ```
 
-The offline engine (`internal/detect`) validates rules against the official Sigma
-schema and supports the common modifiers (`contains`, `startswith`, `endswith`,
-`all`, `re`, `cidr`, `lt|lte|gt|gte`), `*`/`?` wildcards, dotted field lookups,
-and the `1 of` / `all of` quantifiers. The embedded reference rules under
+The offline engine in [`internal/detect`](internal/detect) checks rules against
+the official Sigma schema and supports the common modifiers (`contains`,
+`startswith`, `endswith`, `all`, `re`, `cidr`, `lt|lte|gt|gte`), `*`/`?`
+wildcards, dotted field lookups, and `1 of` / `all of` quantifiers. The
+reference rules under
 [`internal/reference/sigma/`](internal/reference/sigma) are complete examples.
 
 ## Configuration
 
-Settings layer (lowest priority first): built-in defaults →
+Settings layer lowest-priority first: built-in defaults →
 `~/.config/vala/config.json` → `./.vala.json` → environment variables
 (`ANTHROPIC_API_KEY`, `VALA_MODEL`, `VALA_PERMISSION`, `VALA_CONTEXT_WINDOW`,
 `VALA_AUTO_COMPACT_THRESHOLD`, `SCANNER_MCP_URL`, `SCANNER_API_KEY`).
@@ -161,31 +173,24 @@ Settings layer (lowest priority first): built-in defaults →
 }
 ```
 
-### Evidence sources (MCP)
+**Evidence sources.** vala's evidence comes from MCP servers under `mcp`. Each is
+dialed at startup over streamable HTTP, its tools discovered, and the read-only
+ones handed to the agent; its bearer token is read from `api_key_env` and never
+persisted. The reference source is [Scanner](https://scanner.dev), whose inverted
+indexes make exploratory queries fast and cheap. As a shortcut, `SCANNER_MCP_URL`
+(plus `SCANNER_API_KEY`) registers Scanner with no config file. With no MCP
+server, vala reasons only over local files.
 
-vala's evidence comes from [Model Context Protocol](https://modelcontextprotocol.io)
-servers listed under `mcp`. Each server is dialed at startup over streamable
-HTTP, its tools are discovered, and the read-only ones are exposed to the agent
-during investigation and hunts; its bearer token is read from the environment
-variable named by `api_key_env`, never persisted. The reference source is
-[Scanner](https://scanner.dev), whose inverted indexes make exploratory queries
-fast and cheap: `scanner_load_context` discovers indexes and fields,
-`scanner_execute_query` runs an ad-hoc query, and `scanner_get_query_results`
-pages rows without flooding the model's context. As a shortcut, setting
-`SCANNER_MCP_URL` (plus `SCANNER_API_KEY`) registers Scanner without a config
-file. With no MCP server configured, vala has no remote evidence source and can
-only reason over local files.
+**Notion IDs.** The `notion` values are data-source IDs — `vala init` fills them
+in for you. To wire databases by hand, resolve an ID with
+`ntn datasources resolve <id>` and match each property name to the keys vala
+writes (`hunt_id`, `status`, `started_at`, relations like `hunts`/`detections`).
+Leave them empty to stay local.
 
-The `notion` values are **data-source IDs**; the easiest way to populate them is
-`vala init`, which provisions the databases with the exact property names and
-types vala expects and writes the IDs here for you. To wire up databases by hand
-instead, resolve a database ID with `ntn datasources resolve <id>` and ensure
-each data source's property names match the field keys vala writes (`hunt_id`,
-`status`, `started_at`, relations like `hunts`/`detections`, …). Leave the IDs
-empty to run in local mode.
-
-Every non-read-only tool call is gated by `--permission`: `ask` (default) prompts
-per call, `allow` auto-approves for unattended runs, `deny` blocks all writes.
+> [!WARNING]
+> Every non-read-only tool call is gated by `--permission`: `ask` (default)
+> prompts per call, `allow` auto-approves for unattended runs, `deny` blocks all
+> writes. Reach for `allow` only when you trust the run.
 
 ## Development
 
@@ -196,12 +201,11 @@ go test ./...
 ```
 
 CI runs build, vet, `go test -race`, and a `gofmt` check on every push and pull
-request.
-
-The architecture follows [charmbracelet/crush](https://github.com/charmbracelet/crush)
-(one `Tool` type + one embedded `.md` description per tool, a permission gate,
-sessions). The tool registry (`internal/tools/toolbox.go`) is the single
-extension point.
+request. The architecture follows
+[charmbracelet/crush](https://github.com/charmbracelet/crush) — one `Tool` type
+plus one embedded `.md` description per tool, a permission gate, sessions. The
+registry in [`internal/tools/toolbox.go`](internal/tools/toolbox.go) is the
+single extension point.
 
 ## License
 
