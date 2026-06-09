@@ -61,7 +61,7 @@ func Default() *Set {
 		Classes: map[string][]string{
 			"read": {
 				"read", "ls", "glob", "grep",
-				"log_search", "reference_detection",
+				"reference_detection",
 				"validate_detection", "test_detection",
 				"recall",
 			},
@@ -131,6 +131,17 @@ func build(t Tools, d Decision) *Set {
 		}
 	}
 	return &Set{tools: t, decision: d, classOf: classOf}
+}
+
+// ClassifyRead marks the given tools as read-class. It is used at startup to
+// promote dynamically discovered, read-only tools (e.g. an MCP evidence
+// server's query tools) into the read class so they are exposed during
+// investigation and a hunt. Without this they would fall through to the
+// action_execute default and never appear.
+func (s *Set) ClassifyRead(names ...string) {
+	for _, n := range names {
+		s.classOf[n] = governance.ClassRead
+	}
 }
 
 // ClassOf returns a tool's class. Unknown tools default to the most restricted

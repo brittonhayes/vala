@@ -31,11 +31,30 @@ type Config struct {
 	// Notion holds the database IDs the case brain writes to. Empty IDs mean
 	// the brain runs in local (in-memory) mode.
 	Notion brain.DBIDs `json:"notion"`
+	// MCP lists the Model Context Protocol servers vala connects to for evidence
+	// (e.g. Scanner's security data lake). Each server's tools are discovered at
+	// startup and exposed to the agent. Empty means no remote evidence source.
+	MCP []MCPServer `json:"mcp"`
 
 	// APIKey is read from the environment, never persisted.
 	APIKey string `json:"-"`
 	// SlackWebhook is read from SLACK_WEBHOOK_URL, never persisted.
 	SlackWebhook string `json:"-"`
+}
+
+// MCPServer describes one Model Context Protocol server vala connects to. The
+// API key is resolved from APIKeyEnv at load time so secrets stay in the
+// environment rather than the config file.
+type MCPServer struct {
+	// Name namespaces the server's tools inside vala (e.g. "scanner" yields
+	// tools like "scanner_execute_query").
+	Name string `json:"name"`
+	// URL is the server's streamable-HTTP endpoint.
+	URL string `json:"url"`
+	// APIKeyEnv names the environment variable holding the bearer token.
+	APIKeyEnv string `json:"api_key_env"`
+	// APIKey is resolved from APIKeyEnv, never persisted.
+	APIKey string `json:"-"`
 }
 
 // Default returns the built-in configuration.
@@ -77,7 +96,29 @@ func Load(cwd string) (Config, error) {
 	if v := os.Getenv("SLACK_WEBHOOK_URL"); v != "" {
 		cfg.SlackWebhook = v
 	}
+
+	// Convenience: SCANNER_MCP_URL registers Scanner's data lake as a server
+	// without a config file, keyed by SCANNER_API_KEY.
+	if url := os.Getenv("SCANNER_MCP_URL"); url != "" && !hasMCPServer(cfg.MCP, "scanner") {
+		cfg.MCP = append(cfg.MCP, MCPServer{Name: "scanner", URL: url, APIKeyEnv: "SCANNER_API_KEY"})
+	}
+	// Resolve each server's bearer token from its named environment variable.
+	for i := range cfg.MCP {
+		if env := cfg.MCP[i].APIKeyEnv; env != "" {
+			cfg.MCP[i].APIKey = os.Getenv(env)
+		}
+	}
 	return cfg, nil
+}
+
+// hasMCPServer reports whether a server with the given name is already present.
+func hasMCPServer(servers []MCPServer, name string) bool {
+	for _, s := range servers {
+		if s.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // mergeFile overlays a JSON config file onto cfg if the file exists. A missing

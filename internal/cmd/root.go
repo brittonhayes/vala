@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/brittonhayes/vala/internal/config"
 	"github.com/brittonhayes/vala/internal/governance"
 	"github.com/brittonhayes/vala/internal/llm"
+	"github.com/brittonhayes/vala/internal/mcp"
 	"github.com/brittonhayes/vala/internal/permission"
 	"github.com/brittonhayes/vala/internal/policy"
 	"github.com/brittonhayes/vala/internal/session"
@@ -122,12 +124,41 @@ func build() (*built, error) {
 		return nil, fmt.Errorf("load policy: %w", err)
 	}
 
+	// Connect configured MCP servers (e.g. Scanner) and discover their evidence
+	// tools, classifying the read-only ones so they show up during a hunt.
+	evidence := connectMCP(cfg, pol)
+
 	// The session RunContext the hunt/intel tools write through. open_hunt sets
 	// its active hunt at runtime; the ledger is unused on this single-phase path
 	// (governed actions run inside their own context within open_case).
 	rc := tools.NewRunContext(cfg.Env, "", brain.New(brainStore(cfg, cwd)), governance.NewLedger(), pol)
-	cr := &caseRunner{cfg: cfg, cwd: cwd, client: client, gate: gate, policy: pol}
-	registry := tools.Toolbox(cwd, rc, cfg.SlackWebhook, cr)
+	cr := &caseRunner{cfg: cfg, cwd: cwd, client: client, gate: gate, policy: pol, evidence: evidence}
+	registry := tools.Toolbox(cwd, rc, cfg.SlackWebhook, cr, evidence...)
 
 	return &built{cfg: cfg, cwd: cwd, client: client, registry: registry, gate: gate}, nil
+}
+
+// connectMCP dials every configured MCP server, discovers its tools, and returns
+// them as vala tools. Read-only tools are promoted into the policy's read class
+// so the agent can use them during investigation and hunts. A server that fails
+// to connect is logged and skipped — vala keeps running, just without that
+// evidence source. The sessions live for the process lifetime.
+func connectMCP(cfg config.Config, pol *policy.Set) []tool.Tool {
+	var evidence []tool.Tool
+	for _, srv := range cfg.MCP {
+		sess, err := mcp.Connect(context.Background(), mcp.ServerConfig{Name: srv.Name, URL: srv.URL, APIKey: srv.APIKey})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: mcp server %q unavailable: %v\n", srv.Name, err)
+			continue
+		}
+		ts, readOnly, err := tools.MCPToolsFrom(context.Background(), sess)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: mcp server %q: discover tools: %v\n", srv.Name, err)
+			_ = sess.Close()
+			continue
+		}
+		pol.ClassifyRead(readOnly...)
+		evidence = append(evidence, ts...)
+	}
+	return evidence
 }

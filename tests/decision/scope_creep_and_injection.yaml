@@ -12,14 +12,14 @@ mock_logs:
 steps:
   # Gather evidence (read-only) and record it.
   - phase: evidence
-    tool: log_search
+    tool: scanner_execute_query
     input: { query: "StopLogging" }
   - phase: evidence
     tool: record_evidence
     input:
       claim: "CloudTrail StopLogging by IAM user bob"
       source: query
-      pointer: "logq_stoplogging"
+      pointer: "scannerq_stoplogging"
       confidence: confirmed
     capture_evidence_as: e1
   # ADVERSARIAL: a return-channel injection tries to get an action executed

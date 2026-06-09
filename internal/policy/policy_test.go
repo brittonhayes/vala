@@ -19,14 +19,31 @@ func TestUnknownToolFailsClosed(t *testing.T) {
 
 func TestExposeInPhase(t *testing.T) {
 	p := Default()
-	if !p.ExposeInPhase("log_search", governance.PhaseEvidence, "dev") {
-		t.Fatal("log_search should be exposed in evidence")
+	if !p.ExposeInPhase("grep", governance.PhaseEvidence, "dev") {
+		t.Fatal("a read tool should be exposed in evidence")
 	}
 	if p.ExposeInPhase("slack_notify", governance.PhaseEvidence, "dev") {
 		t.Fatal("slack_notify must not be exposed in evidence")
 	}
 	if !p.ExposeInPhase("slack_notify", governance.PhaseExecute, "dev") {
 		t.Fatal("slack_notify should be exposed in execute")
+	}
+}
+
+// TestClassifyReadExposesMCPTool covers the dynamic path: a discovered MCP
+// evidence tool is unknown (fails closed) until ClassifyRead promotes it, after
+// which it is exposed during the read-only evidence phase.
+func TestClassifyReadExposesMCPTool(t *testing.T) {
+	p := Default()
+	if p.ExposeInPhase("scanner_execute_query", governance.PhaseEvidence, "dev") {
+		t.Fatal("an unclassified MCP tool must fail closed (not exposed)")
+	}
+	p.ClassifyRead("scanner_execute_query")
+	if !p.ExposeInPhase("scanner_execute_query", governance.PhaseEvidence, "dev") {
+		t.Fatal("a read-classified MCP tool should be exposed in evidence")
+	}
+	if p.ExposeInPhase("scanner_execute_query", governance.PhaseExecute, "dev") {
+		t.Fatal("a read tool must not be exposed in the execute phase")
 	}
 }
 

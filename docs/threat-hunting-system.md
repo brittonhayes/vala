@@ -128,7 +128,8 @@ instead of started ad hoc.
 
 ### 2. Hunt — investigate read-only, record every fact
 Unchanged from today, and already excellent:
-- `log_search`, `read`, `grep`, `glob` — read-only exploration.
+- `scanner_execute_query` / `scanner_load_context` (and other MCP evidence
+  tools), `read`, `grep`, `glob` — read-only exploration.
 - `record_finding` — each fact becomes an **immutable Evidence pointer** with an
   ID you must cite. (This is vala's strongest existing idea; it's the ADS
   "evidence" discipline made structural.)

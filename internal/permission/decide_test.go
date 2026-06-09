@@ -62,7 +62,7 @@ func TestDecideRequiresApprovalWhenNotAuto(t *testing.T) {
 
 func TestDecideReadOnlyAlwaysAllowed(t *testing.T) {
 	g := gate()
-	req := governance.Request{Tool: "log_search", Phase: governance.PhaseEvidence, Class: governance.ClassRead, Env: "dev"}
+	req := governance.Request{Tool: "scanner_execute_query", Phase: governance.PhaseEvidence, Class: governance.ClassRead, Env: "dev"}
 	if d := g.Decide(req, governance.NewLedger()); !d.Allow {
 		t.Fatal("read-only tool should always be allowed")
 	}

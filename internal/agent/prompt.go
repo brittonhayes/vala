@@ -52,7 +52,10 @@ loop has four steps:
    "queue_hunt" parks a trigger (intel, a hunch, a fresh CVE, a past incident) on
    the backlog as a prioritized hypothesis when you are not hunting it right now.
 2. Hunt. Call "open_hunt" with the question (and, ideally, behavior + data_source,
-   or a backlog_id). Investigate read-only (log_search, read, grep, glob), and
+   or a backlog_id). Investigate read-only with your configured evidence tools:
+   when a Scanner data lake is connected, call scanner_load_context first to
+   discover its indexes and fields, then query with scanner_execute_query; use
+   read, grep, glob for local files — then
    record each fact you rely on with "record_finding" — it returns an ID you must
    cite. Surface reusable intelligence (indicators, TTPs, actors, narrative) with
    "record_intel".

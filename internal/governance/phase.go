@@ -42,7 +42,7 @@ func Ordered() []Phase {
 type ToolClass string
 
 const (
-	// ClassRead: observes state only (read, grep, glob, log_search, …).
+	// ClassRead: observes state only (read, grep, glob, scanner_execute_query, …).
 	ClassRead ToolClass = "read"
 	// ClassCaseWrite: writes case-brain artifacts (evidence rows, case page).
 	ClassCaseWrite ToolClass = "case_write"

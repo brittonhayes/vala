@@ -17,8 +17,12 @@ import "github.com/brittonhayes/vala/internal/tool"
 //     open_hunt sets its active hunt at runtime.
 //   - webhook   is the Slack webhook for the (gated) slack_notify action.
 //   - cr        runs the governed response loop behind the open_case tool.
-func Toolbox(dir string, rc *RunContext, webhook string, cr CaseRunner) *tool.Registry {
+//   - evidence  are the discovered MCP evidence tools (e.g. Scanner's query and
+//     discovery tools) the agent investigates through.
+func Toolbox(dir string, rc *RunContext, webhook string, cr CaseRunner, evidence ...tool.Tool) *tool.Registry {
 	r := tool.NewRegistry()
+	// Investigation evidence sources, discovered from configured MCP servers.
+	r.Register(evidence...)
 	r.Register(
 		// Shell + file operations.
 		&Bash{Dir: dir},
@@ -39,8 +43,6 @@ func Toolbox(dir string, rc *RunContext, webhook string, cr CaseRunner) *tool.Re
 		&ManageDetectionList{Dir: dir},
 		&SetDetectionRunbook{Dir: dir},
 		&ManageDetectionTests{Dir: dir},
-		// Investigation evidence source (mock-capable).
-		&LogSearch{Dir: dir},
 		// Hunting: recall what's already known, queue a trigger, open a hunt,
 		// record findings and intel, link artifacts, store it.
 		&Recall{RC: rc},

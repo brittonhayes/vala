@@ -4,6 +4,10 @@
 # exposed in (see internal/governance/phase.go). Tools NOT listed here default
 # to the most restricted class (action_execute) so they fail closed.
 #
+# Read-only tools discovered from MCP evidence servers (e.g. Scanner's
+# scanner_execute_query / scanner_load_context) are promoted into the read class
+# at startup, so they are not listed here.
+#
 # `environments[*].deny` hard-denies tools in an environment regardless of phase
 # or approval.
 classes:
@@ -12,7 +16,6 @@ classes:
     - ls
     - glob
     - grep
-    - log_search
     - reference_detection
     - validate_detection
     - test_detection

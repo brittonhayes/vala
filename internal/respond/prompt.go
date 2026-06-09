@@ -36,8 +36,10 @@ A new alert has arrived:
   severity: %s
   details:  %s
 
-Investigate it. Use log_search and the read-only tools, and record each relevant
-fact with record_evidence (use the query_id or a concrete pointer). When you have
+Investigate it. Query your configured evidence source (scanner_execute_query
+against the Scanner data lake when connected) and the read-only tools, and record
+each relevant fact with record_evidence (cite the query_id or a concrete
+pointer). When you have
 gathered enough to characterize the incident, stop — do not propose actions yet.`,
 		basePrompt, a.Source, a.Severity, a.Raw)
 }
