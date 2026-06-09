@@ -90,8 +90,10 @@ verify and reuse what's there rather than duplicating it.
 ## The hunt loop
 
 vala runs a single loop, shaped after the frameworks every hunt team knows —
-Sqrrl's Hunting Loop, Splunk PEAK, TaHiTI. The rationale lives in
-[`docs/threat-hunting-system.md`](docs/threat-hunting-system.md).
+Sqrrl's Hunting Loop, Splunk PEAK, TaHiTI. The loop and its rationale are
+specified in [`docs/SPEC-0001`](docs/SPEC-0001-overview-and-hunt-loop.md); the
+full specification set — the grounding truth for what vala offers — lives in
+[`docs/`](docs/README.md).
 
 **1 · Scope.** State the hypothesis with ABLE — the testable adversary
 **B**ehavior and the data-source **L**ocation where it'd show up. `recall` reads
