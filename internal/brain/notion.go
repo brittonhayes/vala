@@ -1,11 +1,12 @@
-// Package brain is vala's Notion "case brain": typed writers for the Alerts,
-// Cases, Evidence, Actions, and Runs databases plus the narrative case page.
+// Package brain is vala's Notion "hunt brain": typed writers for the Hunts,
+// Evidence, Intel, Detections, and Backlog databases plus the narrative hunt
+// page.
 //
 // All writes go through the Notion interface. At runtime the default
 // implementation shells out to the operator's authenticated `ntn` CLI (the same
-// transport as internal/tools/ntn.go); tests and the harness use the in-memory
-// Mem implementation, so the whole case-brain can be exercised deterministically
-// without a network or Notion workspace.
+// transport as internal/tools/ntn.go); tests use the in-memory Mem
+// implementation, so the whole brain can be exercised deterministically without
+// a network or Notion workspace.
 package brain
 
 import (
@@ -28,7 +29,7 @@ type Row struct {
 	Props map[string]any `json:"props"`
 }
 
-// Notion is the read/write surface the case brain needs.
+// Notion is the read/write surface the brain needs.
 type Notion interface {
 	// CreateRow appends a row to a database and returns its ID.
 	CreateRow(ctx context.Context, db string, props map[string]any) (string, error)
@@ -43,9 +44,9 @@ type Notion interface {
 	Query(ctx context.Context, db, query string, limit int) ([]Row, error)
 }
 
-// Mem is an in-memory Notion implementation for tests, the harness, and
-// unconfigured local runs. It records everything it is asked to write so callers
-// can assert on the resulting case brain.
+// Mem is an in-memory Notion implementation for tests and unconfigured local
+// runs. It records everything it is asked to write so callers can assert on the
+// resulting brain.
 type Mem struct {
 	mu    sync.Mutex
 	seq   int
@@ -166,16 +167,12 @@ type NTN struct {
 
 // DBIDs holds the Notion database IDs the brain writes to.
 type DBIDs struct {
-	Alerts     string `json:"alerts"`
-	Cases      string `json:"cases"`
 	Evidence   string `json:"evidence"`
-	Actions    string `json:"actions"`
-	Runs       string `json:"runs"`
 	Hunts      string `json:"hunts"`
 	Intel      string `json:"intel"`
 	Detections string `json:"detections"`
 	Backlog    string `json:"backlog"`
-	Parent     string `json:"case_page_parent"`
+	Parent     string `json:"page_parent"`
 }
 
 func (n *NTN) bin() string {

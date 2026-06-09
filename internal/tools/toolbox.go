@@ -4,22 +4,19 @@ import "github.com/brittonhayes/vala/internal/tool"
 
 // Toolbox builds the single tool registry for vala's unified harness: the whole
 // LEGO box of primitives the agent composes to hunt, record and link threat
-// intelligence, author and validate detections, and work alerts. Every workflow
-// that used to be its own command is now just a set of tools in this one box.
+// intelligence, and author and validate detections. Every workflow that used to
+// be its own command is now just a set of tools in this one box.
 //
 // It is the single extension point — register new integrations (e.g. an aws
 // tool for cloud investigation) here. All tools are gated at call time by the
-// permission gate (and, inside a governed case, by policy); exposing a tool here
-// does not bypass that.
+// permission gate; exposing a tool here does not bypass that.
 //
 //   - dir       anchors the file/shell and detection-authoring tools.
 //   - rc        is the session RunContext the hunt/intel tools write through;
 //     open_hunt sets its active hunt at runtime.
-//   - webhook   is the Slack webhook for the (gated) slack_notify action.
-//   - cr        runs the governed response loop behind the open_case tool.
 //   - evidence  are the discovered MCP evidence tools (e.g. Scanner's query and
 //     discovery tools) the agent investigates through.
-func Toolbox(dir string, rc *RunContext, webhook string, cr CaseRunner, evidence ...tool.Tool) *tool.Registry {
+func Toolbox(dir string, rc *RunContext, evidence ...tool.Tool) *tool.Registry {
 	r := tool.NewRegistry()
 	// Investigation evidence sources, discovered from configured MCP servers.
 	r.Register(evidence...)
@@ -52,8 +49,6 @@ func Toolbox(dir string, rc *RunContext, webhook string, cr CaseRunner, evidence
 		&RecordIntel{RC: rc},
 		&LinkArtifacts{RC: rc},
 		&StoreHunt{RC: rc},
-		// Incident response: the doorway into the governed case loop.
-		&OpenCase{Runner: cr, Dir: dir},
 		// Notion documentation.
 		&NTN{Dir: dir},
 	)

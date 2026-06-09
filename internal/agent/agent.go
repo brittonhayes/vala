@@ -10,10 +10,8 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/brittonhayes/vala/internal/governance"
 	"github.com/brittonhayes/vala/internal/llm"
 	"github.com/brittonhayes/vala/internal/permission"
-	"github.com/brittonhayes/vala/internal/policy"
 	"github.com/brittonhayes/vala/internal/tool"
 )
 
@@ -89,8 +87,7 @@ func New(client *llm.Client, registry *tool.Registry, gate *permission.Gate, wor
 
 // Run advances the conversation by one user turn. It appends the user input to
 // history, drives the tool-use loop to completion, and returns the updated
-// history so the caller can persist it and continue the session. This is the
-// legacy single-phase path used by the REPL and `vala run`; every tool is
+// history so the caller can persist it and continue the session. Every tool is
 // exposed and gated only by permission.Gate.Allow.
 func (a *Agent) Run(ctx context.Context, history []anthropic.MessageParam, userInput string, ev Events) ([]anthropic.MessageParam, error) {
 	messages := append(history, anthropic.NewUserMessage(anthropic.NewTextBlock(userInput)))
@@ -100,59 +97,12 @@ func (a *Agent) Run(ctx context.Context, history []anthropic.MessageParam, userI
 	return a.loop(ctx, messages, a.system, a.registry.ToAnthropic(), decide, a.maxSteps, ev)
 }
 
-// Governor carries the per-run governance context for the phase-separated loop:
-// the current phase, the approval ledger, the policy set, and the environment.
-type Governor struct {
-	Phase  governance.Phase
-	Ledger *governance.Ledger
-	Policy *policy.Set
-	Env    string
-}
-
-// RunPhase drives the tool-use loop for a single governance phase. It exposes
-// only the tools permitted in gov.Phase and routes every tool call through the
-// phase-aware permission.Gate.Decide. The caller supplies the message history
-// and a phase-specific system prompt, and gets the updated history back.
-func (a *Agent) RunPhase(ctx context.Context, messages []anthropic.MessageParam, system string, gov Governor, maxSteps int, ev Events) ([]anthropic.MessageParam, error) {
-	pol := gov.Policy
-	if pol == nil {
-		pol = policy.Default()
-	}
-	tools := a.registry.ToAnthropicFiltered(func(t tool.Tool) bool {
-		return pol.ExposeInPhase(t.Name(), gov.Phase, gov.Env)
-	})
-	decide := func(block anthropic.ContentBlockUnion, summary string, t tool.Tool) (bool, string) {
-		class := pol.ClassOf(block.Name)
-		req := governance.Request{
-			Tool:     block.Name,
-			Summary:  summary,
-			ReadOnly: t.ReadOnly(),
-			Phase:    gov.Phase,
-			Class:    class,
-			Env:      gov.Env,
-		}
-		if class == governance.ClassActionExecute {
-			req.ActionID = governance.ActionID(block.Name, block.Input)
-		}
-		d := a.gate.Decide(req, gov.Ledger)
-		if d.Allow && req.ActionID != "" && gov.Ledger != nil {
-			// Enforce execute-at-most-once at the moment of allow.
-			gov.Ledger.MarkExecuted(req.ActionID)
-		}
-		return d.Allow, "Denied: " + d.Reason
-	}
-	if maxSteps <= 0 {
-		maxSteps = a.maxSteps
-	}
-	return a.loop(ctx, messages, system, tools, decide, maxSteps, ev)
-}
-
 // decideFunc decides whether a tool call may run, returning the denial message
 // to feed back to the model if not.
 type decideFunc func(block anthropic.ContentBlockUnion, summary string, t tool.Tool) (allow bool, denyMsg string)
 
-// loop is the shared tool-use loop body used by both the legacy and governed
-// paths. It runs until the model stops requesting tools or the step limit hits.
+// loop is the tool-use loop body. It runs until the model stops requesting
+// tools or the step limit hits.
 func (a *Agent) loop(ctx context.Context, messages []anthropic.MessageParam, system string, tools []anthropic.ToolUnionParam, decide decideFunc, maxSteps int, ev Events) ([]anthropic.MessageParam, error) {
 	for step := 0; step < maxSteps; step++ {
 		resp, err := a.llm.Complete(ctx, system, messages, tools)

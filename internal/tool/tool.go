@@ -109,9 +109,7 @@ func (r *Registry) ToAnthropic() []anthropic.ToolUnionParam {
 }
 
 // ToAnthropicFiltered is like ToAnthropic but only includes tools for which the
-// predicate returns true. A nil predicate includes every tool. The governed
-// loop uses this to expose only the tools permitted in the current phase, so
-// the model never even sees a write/destructive tool during investigation.
+// predicate returns true. A nil predicate includes every tool.
 func (r *Registry) ToAnthropicFiltered(include func(Tool) bool) []anthropic.ToolUnionParam {
 	tools := r.All()
 	out := make([]anthropic.ToolUnionParam, 0, len(tools))

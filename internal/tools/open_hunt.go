@@ -16,7 +16,7 @@ var openHuntDescription string
 // active hunt for the session, so record_finding and store_hunt have somewhere
 // to write. It is the entry point of the hunting workflow in the unified
 // harness: open a hunt, investigate read-only, record findings, then store_hunt
-// with a verdict. Class: case_write.
+// with a verdict.
 type OpenHunt struct{ RC *RunContext }
 
 func (t *OpenHunt) Name() string        { return "open_hunt" }

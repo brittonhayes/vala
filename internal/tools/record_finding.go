@@ -13,9 +13,9 @@ import (
 var recordFindingDescription string
 
 // RecordFinding appends an immutable Evidence row to the current hunt and returns
-// its ID for the model to cite in the hunt's findings. It is the hunt-loop
-// counterpart of record_evidence: a finding is an Evidence row linked to the
-// hunt instead of a case. Class: case_write.
+// its ID for the model to cite in the hunt's findings. A finding is an Evidence
+// row whose pointer (a query ID, URL, hash, or log reference) backs a claim,
+// linked to the active hunt.
 type RecordFinding struct{ RC *RunContext }
 
 func (t *RecordFinding) Name() string        { return "record_finding" }

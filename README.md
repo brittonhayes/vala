@@ -3,9 +3,7 @@
 An agentic threat-hunting system in a single Go binary.
 
 vala runs one loop: scope a hypothesis, hunt it, reach a verdict, and write the
-detection a confirmed hunt warrants. Every step is recorded in Notion. Hand it an
-alert instead and it investigates, proposes actions, and writes an auditable
-case, executing nothing you haven't approved.
+detection a confirmed hunt warrants. Every step is recorded in Notion.
 
 It runs on Anthropic's Claude and needs no external detection toolchain: Sigma
 rules are validated and unit-tested offline, inside the binary — no `sigma-cli`,
@@ -43,7 +41,6 @@ vala
   DeleteDetector, data source cloudtrail
 › hunt whether anyone disabled GuardDuty in the last 24h, and store the hunt
 › now that it's confirmed, author and link a Sigma detection for that behavior
-› work the alert in tests/ops/sample_alert.json
 ```
 
 Inside the session, a few slash commands manage the conversation itself rather
@@ -107,22 +104,6 @@ with `detections_dir` (default `detections`).
 
 In Notion, backlog, intel, hunts, and detections form one connected graph.
 
-### Responding to alerts
-
-Hand it an alert and `open_case` drives it through a phase-separated governance
-loop:
-
-```
-plan ─► evidence ─► propose ─► approval ─► execute ─► report
-```
-
-Each phase exposes a smaller set of tools. Investigation is read-only and records
-immutable Evidence pointers; the agent proposes Actions but can't execute them; a
-human or policy approves each one; only approved actions run, each at most once;
-the final case page is rejected unless every claim cites evidence. The result is
-an auditable case record in Notion. Without configured Notion database IDs, vala
-runs in local mode and prints artifacts to stdout.
-
 ## Detections
 
 A confirmed hunt's output is a [Sigma](https://sigmahq.io) rule — vendor-neutral
@@ -161,25 +142,21 @@ and the `1 of` / `all of` quantifiers. The embedded reference rules under
 
 Settings layer (lowest priority first): built-in defaults →
 `~/.config/vala/config.json` → `./.vala.json` → environment variables
-(`ANTHROPIC_API_KEY`, `VALA_MODEL`, `VALA_PERMISSION`, `VALA_ENV`,
-`VALA_CONTEXT_WINDOW`, `VALA_AUTO_COMPACT_THRESHOLD`, `SLACK_WEBHOOK_URL`,
-`SCANNER_MCP_URL`, `SCANNER_API_KEY`).
+(`ANTHROPIC_API_KEY`, `VALA_MODEL`, `VALA_PERMISSION`, `VALA_CONTEXT_WINDOW`,
+`VALA_AUTO_COMPACT_THRESHOLD`, `SCANNER_MCP_URL`, `SCANNER_API_KEY`).
 
 ```json
 {
   "model": "claude-opus-4-8",
   "permission": "ask",
   "detections_dir": "detections",
-  "env": "dev",
   "context_window": 200000,
   "auto_compact_threshold": 0.8,
   "mcp": [
     { "name": "scanner", "url": "https://<your>.scanner.dev/mcp", "api_key_env": "SCANNER_API_KEY" }
   ],
   "notion": {
-    "alerts": "", "cases": "", "evidence": "", "actions": "", "runs": "",
-    "hunts": "", "intel": "", "detections": "", "backlog": "",
-    "case_page_parent": ""
+    "evidence": "", "hunts": "", "intel": "", "detections": "", "backlog": ""
   }
 }
 ```
@@ -199,14 +176,14 @@ pages rows without flooding the model's context. As a shortcut, setting
 file. With no MCP server configured, vala has no remote evidence source and can
 only reason over local files.
 
-`env` selects the policy environment (`dev`/`prod`). The `notion` values are
-**data-source IDs**; the easiest way to populate them is `vala init`, which
-provisions the databases with the exact property names and types vala expects and
-writes the IDs here for you. To wire up databases by hand instead, resolve a
-database ID with `ntn datasources resolve <id>` and ensure each data source's
-property names match the field keys vala writes (`hunt_id`, `status`,
-`started_at`, relations like `hunts`/`detections`, …). Leave the IDs empty to run
-in local mode.
+The `notion` values are **data-source IDs**; the easiest way to populate them is
+`vala init`, which provisions the databases with the exact property names and
+types vala expects and writes the IDs here for you. To wire up databases by hand
+instead, resolve a database ID with `ntn datasources resolve <id>` and ensure
+each data source's property names match the field keys vala writes (`hunt_id`,
+`status`, `started_at`, relations like `hunts`/`detections`, …). Leave the IDs
+empty to run in local mode.
+
 Every non-read-only tool call is gated by `--permission`: `ask` (default) prompts
 per call, `allow` auto-approves for unattended runs, `deny` blocks all writes.
 
@@ -216,15 +193,14 @@ per call, `allow` auto-approves for unattended runs, `deny` blocks all writes.
 go build ./...
 go vet ./...
 go test ./...
-go run ./cmd/vala harness --fixtures tests
 ```
 
-CI runs build, vet, `go test -race`, the adversarial harness (diffed against
-`runner/baseline.json`), and a `gofmt` check on every push and pull request.
+CI runs build, vet, `go test -race`, and a `gofmt` check on every push and pull
+request.
 
 The architecture follows [charmbracelet/crush](https://github.com/charmbracelet/crush)
 (one `Tool` type + one embedded `.md` description per tool, a permission gate,
-sessions). The tool registry (`internal/tools/default.go`) is the single
+sessions). The tool registry (`internal/tools/toolbox.go`) is the single
 extension point.
 
 ## License

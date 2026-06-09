@@ -12,7 +12,7 @@ const (
 
 // Intel is a piece of threat intelligence stored as a first-class brain
 // artifact: an indicator, a TTP, an actor, or a narrative. Intel connects to the
-// hunts that surfaced it, the alerts it explains, and the detections it informs.
+// hunts that surfaced it and the detections it informs.
 type Intel struct {
 	ID          string   `json:"id"`
 	Kind        string   `json:"kind"`
@@ -22,7 +22,6 @@ type Intel struct {
 	Source      string   `json:"source"`
 	Description string   `json:"description"`
 	Hunts       []string `json:"hunts"`
-	Alerts      []string `json:"alerts"`
 	Detections  []string `json:"detections"`
 }
 
@@ -37,11 +36,10 @@ type DetectionRef struct {
 	Level  string   `json:"level"`
 	Intel  []string `json:"intel"`
 	Hunts  []string `json:"hunts"`
-	Alerts []string `json:"alerts"`
 }
 
 // RecordIntel writes an Intel row and returns its ID. Initial relations (hunts,
-// alerts, detections) are set inline; Link adds more after the fact.
+// detections) are set inline; Link adds more after the fact.
 func (c *Client) RecordIntel(ctx context.Context, i Intel) (intelID string, err error) {
 	props := map[string]any{
 		"intel_id":    i.Value,
@@ -54,7 +52,6 @@ func (c *Client) RecordIntel(ctx context.Context, i Intel) (intelID string, err 
 		"created_at":  nowRFC3339(),
 	}
 	setRelation(props, "hunts", i.Hunts)
-	setRelation(props, "alerts", i.Alerts)
 	setRelation(props, "detections", i.Detections)
 	return c.n.CreateRow(ctx, c.dbName(DBIntel), props)
 }
@@ -72,13 +69,12 @@ func (c *Client) RecordDetection(ctx context.Context, d DetectionRef) (detID str
 	}
 	setRelation(props, "intel", d.Intel)
 	setRelation(props, "hunts", d.Hunts)
-	setRelation(props, "alerts", d.Alerts)
 	return c.n.CreateRow(ctx, c.dbName(DBDetections), props)
 }
 
 // Link is the single linking primitive: it sets a relation property on an
 // existing row to the given target row IDs, connecting brain artifacts (intel,
-// hunts, alerts, detections) into one graph.
+// hunts, detections) into one graph.
 func (c *Client) Link(ctx context.Context, rowID, relation string, targetIDs ...string) error {
 	if len(targetIDs) == 0 {
 		return nil

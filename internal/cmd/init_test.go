@@ -13,8 +13,8 @@ import (
 )
 
 // TestBrainConfigured drives the unconfigured-brain predicate that gates the
-// first-run prompt and brainStore's backend choice: any of cases, hunts, or
-// intel being set means the brain persists.
+// first-run prompt and brainStore's backend choice: any of hunts, intel, or
+// evidence being set means the brain persists.
 func TestBrainConfigured(t *testing.T) {
 	cases := []struct {
 		name string
@@ -23,11 +23,10 @@ func TestBrainConfigured(t *testing.T) {
 	}{
 		{"empty", brain.DBIDs{}, false},
 		{"only parent set", brain.DBIDs{Parent: "page_1"}, false},
-		{"only alerts set", brain.DBIDs{Alerts: "ds_a"}, false},
-		{"cases set", brain.DBIDs{Cases: "ds_c"}, true},
+		{"evidence set", brain.DBIDs{Evidence: "ds_e"}, true},
 		{"hunts set", brain.DBIDs{Hunts: "ds_h"}, true},
 		{"intel set", brain.DBIDs{Intel: "ds_i"}, true},
-		{"fully configured", brain.DBIDs{Cases: "c", Hunts: "h", Intel: "i"}, true},
+		{"fully configured", brain.DBIDs{Evidence: "e", Hunts: "h", Intel: "i"}, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -39,14 +38,10 @@ func TestBrainConfigured(t *testing.T) {
 }
 
 // TestDBIDsFromMap asserts provisioning output (logical name -> data-source ID)
-// is mapped onto the right DBIDs fields, including the case-page parent.
+// is mapped onto the right DBIDs fields, including the narrative-page parent.
 func TestDBIDsFromMap(t *testing.T) {
 	ds := map[string]string{
-		brain.DBAlerts:     "ds_alerts",
-		brain.DBCases:      "ds_cases",
 		brain.DBEvidence:   "ds_evidence",
-		brain.DBActions:    "ds_actions",
-		brain.DBRuns:       "ds_runs",
 		brain.DBHunts:      "ds_hunts",
 		brain.DBIntel:      "ds_intel",
 		brain.DBDetections: "ds_detections",
@@ -54,8 +49,7 @@ func TestDBIDsFromMap(t *testing.T) {
 	}
 	got := brain.DBIDsFromMap(ds, "page_parent")
 	want := brain.DBIDs{
-		Alerts: "ds_alerts", Cases: "ds_cases", Evidence: "ds_evidence",
-		Actions: "ds_actions", Runs: "ds_runs", Hunts: "ds_hunts",
+		Evidence: "ds_evidence", Hunts: "ds_hunts",
 		Intel: "ds_intel", Detections: "ds_detections", Backlog: "ds_backlog",
 		Parent: "page_parent",
 	}

@@ -117,7 +117,7 @@ func TestReadOnlyFlags(t *testing.T) {
 		"edit_detection_logic": true, "manage_detection_list": true,
 		"set_detection_runbook": true, "manage_detection_tests": true,
 	}
-	for _, tl := range Toolbox(t.TempDir(), nil, "", nil).All() {
+	for _, tl := range Toolbox(t.TempDir(), nil).All() {
 		if readOnly[tl.Name()] && !tl.ReadOnly() {
 			t.Errorf("%s should be read-only", tl.Name())
 		}

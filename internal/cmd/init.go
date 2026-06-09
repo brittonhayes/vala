@@ -47,7 +47,7 @@ func init() {
 }
 
 // provisionBrain runs the full init flow: preflight, idempotency check, create
-// the databases and their relations, create the case-page parent, and merge the
+// the databases and their relations, create the hunt-page parent, and merge the
 // resulting data-source IDs into .vala.json. parent may be empty (the operator
 // is prompted); force re-provisions even when a brain is already configured.
 func provisionBrain(ctx context.Context, cwd, parent string, force bool) error {
@@ -106,10 +106,10 @@ func provisionBrain(ctx context.Context, cwd, parent string, force bool) error {
 		}
 	}
 
-	// Create the narrative-page parent the brain writes hunt/case pages beneath.
-	pageID, err := store.CreateChildPage(ctx, parent, "Vala Case & Hunt Pages")
+	// Create the narrative-page parent the brain writes hunt pages beneath.
+	pageID, err := store.CreateChildPage(ctx, parent, "Vala Hunt Pages")
 	if err != nil {
-		return fmt.Errorf("create case-page parent: %w", err)
+		return fmt.Errorf("create hunt-page parent: %w", err)
 	}
 
 	ids := brain.DBIDsFromMap(dsByName, pageID)

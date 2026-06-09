@@ -7,8 +7,8 @@ import (
 )
 
 // Hunt is a hypothesis-driven threat hunt: a question, the hypothesis it tests,
-// and its outcome. Findings are recorded as Evidence rows linked back to the
-// hunt, mirroring the immutable-pointer discipline used for case evidence.
+// and its outcome. Findings are recorded as immutable Evidence rows linked back
+// to the hunt, so every claim in the hunt page traces to a pointer.
 type Hunt struct {
 	ID         string `json:"id"`
 	Question   string `json:"question"`
@@ -24,8 +24,7 @@ type Hunt struct {
 
 // HuntPage is the structured narrative generated for a completed hunt. Render
 // turns it into markdown; LintHuntPage enforces that every declarative finding
-// cites an Evidence row or is explicitly a hypothesis — the same evidence
-// discipline as the case page.
+// cites an Evidence row or is explicitly a hypothesis.
 type HuntPage struct {
 	HuntID     string
 	Question   string
@@ -83,8 +82,8 @@ func (p HuntPage) Render() string {
 
 // LintHuntPage returns a list of violations: declarative (non-hypothesis) claims
 // in the Findings or Hypotheses sections that cite no evidence, or that cite an
-// evidence ID with no matching Evidence row. It mirrors LintCasePage so a hunt
-// narrative is held to the same evidence-backing standard as a case.
+// evidence ID with no matching Evidence row. This is the code-enforced version
+// of the rule that every hunt finding is backed by an immutable pointer.
 func LintHuntPage(p HuntPage) []string {
 	known := map[string]bool{}
 	for _, e := range p.Evidence {

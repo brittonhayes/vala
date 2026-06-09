@@ -124,15 +124,11 @@ func Schema() []DBSpec {
 }
 
 // DBIDsFromMap assembles a DBIDs from a logical-store-name -> data-source-ID map
-// (keyed by the brain.DB* constants) plus the case-page parent page ID. It is the
-// bridge from provisioning output to the config the brain reads.
+// (keyed by the brain.DB* constants) plus the narrative-page parent page ID. It
+// is the bridge from provisioning output to the config the brain reads.
 func DBIDsFromMap(ds map[string]string, parent string) DBIDs {
 	return DBIDs{
-		Alerts:     ds[DBAlerts],
-		Cases:      ds[DBCases],
 		Evidence:   ds[DBEvidence],
-		Actions:    ds[DBActions],
-		Runs:       ds[DBRuns],
 		Hunts:      ds[DBHunts],
 		Intel:      ds[DBIntel],
 		Detections: ds[DBDetections],
@@ -231,7 +227,7 @@ func (n *NTN) DataSourceExists(ctx context.Context, dsID string) bool {
 }
 
 // CreateChildPage creates an empty narrative-parent page titled title under
-// parentPageID and returns its ID. The brain writes hunt/case pages beneath it.
+// parentPageID and returns its ID. The brain writes hunt pages beneath it.
 func (n *NTN) CreateChildPage(ctx context.Context, parentPageID, title string) (string, error) {
 	out, err := n.runOut(ctx, "pages", "create", "--parent", "page:"+parentPageID, "--content", "# "+title, "--json")
 	if err != nil {

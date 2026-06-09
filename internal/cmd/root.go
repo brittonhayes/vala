@@ -9,11 +9,9 @@ import (
 	"github.com/brittonhayes/vala/internal/agent"
 	"github.com/brittonhayes/vala/internal/brain"
 	"github.com/brittonhayes/vala/internal/config"
-	"github.com/brittonhayes/vala/internal/governance"
 	"github.com/brittonhayes/vala/internal/llm"
 	"github.com/brittonhayes/vala/internal/mcp"
 	"github.com/brittonhayes/vala/internal/permission"
-	"github.com/brittonhayes/vala/internal/policy"
 	"github.com/brittonhayes/vala/internal/session"
 	"github.com/brittonhayes/vala/internal/tool"
 	"github.com/brittonhayes/vala/internal/tools"
@@ -31,17 +29,16 @@ var (
 // rootCmd starts the interactive REPL by default.
 var rootCmd = &cobra.Command{
 	Use:   "vala",
-	Short: "Agentic security harness for threat hunting, detection, and response",
+	Short: "Agentic security harness for threat hunting and detection",
 	Long: `vala is a single agentic security harness: one interactive session with a
 toolbox the agent composes to hunt threats, record and link threat
-intelligence, author and validate detections, and work alerts — documenting it
-all in a Notion-backed brain.
+intelligence, and author and validate detections — documenting it all in a
+Notion-backed brain.
 
 There is one surface and one set of tools. Workflows are not separate commands;
 they are things you ask the agent to do, and it reaches for the right
 primitives: open_hunt to investigate a question, record_intel/link_artifacts to
-build the intel graph, the detection-authoring tools to write Sigma rules, and
-open_case to work an alert through the governed response loop.
+build the intel graph, and the detection-authoring tools to write Sigma rules.
 
 Run with no arguments to start an interactive session, or use "vala run" for a
 single non-interactive task.`,
@@ -85,7 +82,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&flagPermission, "permission", "", "permission mode: ask | allow | deny")
 	rootCmd.PersistentFlags().BoolVar(&flagNoInitPrompt, "no-init-prompt", false, "suppress the first-run notice when no Notion brain is configured")
 	rootCmd.PersistentFlags().BoolVar(&flagRequireBrain, "require-brain", false, "fail instead of falling back to the ephemeral in-memory brain")
-	rootCmd.AddCommand(runCmd, harnessCmd, versionCmd, initCmd)
+	rootCmd.AddCommand(runCmd, versionCmd, initCmd)
 }
 
 // built bundles the constructed dependencies for a command.
@@ -132,31 +129,32 @@ func build() (*built, error) {
 	}
 	gate := permission.New(permission.Parse(cfg.Permission), cfg.Allowlist)
 
-	pol, err := policy.Load(cwd)
-	if err != nil {
-		return nil, fmt.Errorf("load policy: %w", err)
-	}
-
 	// Connect configured MCP servers (e.g. Scanner) and discover their evidence
-	// tools, classifying the read-only ones so they show up during a hunt.
-	evidence := connectMCP(cfg, pol)
+	// tools so they show up during a hunt.
+	evidence := connectMCP(cfg)
 
 	// The session RunContext the hunt/intel tools write through. open_hunt sets
-	// its active hunt at runtime; the ledger is unused on this single-phase path
-	// (governed actions run inside their own context within open_case).
-	rc := tools.NewRunContext(cfg.Env, "", brain.New(brainStore(cfg, cwd)), governance.NewLedger(), pol)
-	cr := &caseRunner{cfg: cfg, cwd: cwd, client: client, gate: gate, policy: pol, evidence: evidence}
-	registry := tools.Toolbox(cwd, rc, cfg.SlackWebhook, cr, evidence...)
+	// its active hunt at runtime.
+	rc := tools.NewRunContext(brain.New(brainStore(cfg, cwd)))
+	registry := tools.Toolbox(cwd, rc, evidence...)
 
 	return &built{cfg: cfg, cwd: cwd, client: client, registry: registry, gate: gate}, nil
 }
 
+// brainStore returns an NTN-backed store when Notion DB IDs are configured,
+// otherwise an in-memory store for local runs.
+func brainStore(cfg config.Config, cwd string) brain.Notion {
+	if brainConfigured(cfg) {
+		return &brain.NTN{Dir: cwd, DBs: cfg.Notion}
+	}
+	return brain.NewMem()
+}
+
 // connectMCP dials every configured MCP server, discovers its tools, and returns
-// them as vala tools. Read-only tools are promoted into the policy's read class
-// so the agent can use them during investigation and hunts. A server that fails
-// to connect is logged and skipped — vala keeps running, just without that
-// evidence source. The sessions live for the process lifetime.
-func connectMCP(cfg config.Config, pol *policy.Set) []tool.Tool {
+// them as vala tools. A server that fails to connect is logged and skipped —
+// vala keeps running, just without that evidence source. The sessions live for
+// the process lifetime.
+func connectMCP(cfg config.Config) []tool.Tool {
 	var evidence []tool.Tool
 	for _, srv := range cfg.MCP {
 		sess, err := mcp.Connect(context.Background(), mcp.ServerConfig{Name: srv.Name, URL: srv.URL, APIKey: srv.APIKey})
@@ -164,13 +162,12 @@ func connectMCP(cfg config.Config, pol *policy.Set) []tool.Tool {
 			fmt.Fprintf(os.Stderr, "warning: mcp server %q unavailable: %v\n", srv.Name, err)
 			continue
 		}
-		ts, readOnly, err := tools.MCPToolsFrom(context.Background(), sess)
+		ts, _, err := tools.MCPToolsFrom(context.Background(), sess)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "warning: mcp server %q: discover tools: %v\n", srv.Name, err)
 			_ = sess.Close()
 			continue
 		}
-		pol.ClassifyRead(readOnly...)
 		evidence = append(evidence, ts...)
 	}
 	return evidence

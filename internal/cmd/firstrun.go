@@ -20,11 +20,11 @@ var (
 
 // brainConfigured reports whether the project has a live Notion brain wired up.
 // It is the single predicate brainStore uses to choose its backend and the
-// first-run notice uses to decide whether to warn: any of the case, hunt, or
-// intel data sources being set means writes persist to Notion.
+// first-run notice uses to decide whether to warn: any of the hunts, intel, or
+// evidence data sources being set means writes persist to Notion.
 func brainConfigured(cfg config.Config) bool {
 	n := cfg.Notion
-	return n.Cases != "" || n.Hunts != "" || n.Intel != ""
+	return n.Hunts != "" || n.Intel != "" || n.Evidence != ""
 }
 
 const ephemeralNotice = `⚠ No Notion brain is configured — running in ephemeral in-memory mode.

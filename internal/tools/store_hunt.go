@@ -17,7 +17,7 @@ var storeHuntDescription string
 // with its outcome. The model supplies structured findings (each citing finding
 // IDs or flagged as a hypothesis); the tool fills the Evidence table from the
 // run's recorded findings, lints the page, and refuses to write if any finding
-// is unsupported. Class: case_write.
+// is unsupported.
 type StoreHunt struct {
 	RC *RunContext
 }

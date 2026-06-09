@@ -56,7 +56,7 @@ func TestLinkConnectsArtifacts(t *testing.T) {
 	}
 
 	// Linking with no targets is a no-op, not an error.
-	if err := c.Link(ctx, huntID, "alerts"); err != nil {
+	if err := c.Link(ctx, huntID, "intel"); err != nil {
 		t.Fatalf("empty Link should be a no-op: %v", err)
 	}
 }

@@ -5,13 +5,6 @@
 // trust a session.
 package permission
 
-import (
-	"fmt"
-
-	"github.com/brittonhayes/vala/internal/governance"
-	"github.com/brittonhayes/vala/internal/policy"
-)
-
 // Mode controls the default disposition for non-read-only tool calls.
 type Mode string
 
@@ -59,10 +52,6 @@ type Gate struct {
 	Mode      Mode
 	allowlist map[string]bool
 	Prompt    Prompter
-
-	// Policy is consulted by Decide for the governed (phase-separated) loop. It
-	// is nil for the legacy single-phase Allow path.
-	Policy *policy.Set
 }
 
 // New builds a Gate from a mode and a list of always-allowed tool names.
@@ -84,8 +73,7 @@ func (g *Gate) Allow(tool, summary string, readOnly bool) bool {
 	return g.approveByMode(tool, summary)
 }
 
-// approveByMode applies the mode/allowlist/prompter decision shared by the
-// legacy Allow path and the governed Decide path's final human gate.
+// approveByMode applies the mode/allowlist/prompter decision behind Allow.
 func (g *Gate) approveByMode(tool, summary string) bool {
 	if g == nil || g.Mode == ModeAllow {
 		return true
@@ -101,52 +89,6 @@ func (g *Gate) approveByMode(tool, summary string) bool {
 	}
 	// No way to ask and not explicitly allowed: fail closed.
 	return false
-}
-
-// Decide is the phase- and ledger-aware verdict used by the governed loop. It
-// is the authoritative enforcement point for F2: a write/destructive action can
-// only run in PhaseExecute with an approval on record. Checks are ordered and
-// fail closed.
-func (g *Gate) Decide(req governance.Request, led *governance.Ledger) governance.Decision {
-	pol := g.Policy
-	if pol == nil {
-		pol = policy.Default()
-	}
-
-	// 1. Read / control / case-writing tools are not side-effecting actions and
-	//    are governed only by phase exposure (enforced upstream) — allow.
-	if req.Class != governance.ClassActionExecute {
-		return governance.Decision{Allow: true}
-	}
-
-	// 2. Hard environment deny.
-	if pol.EnvDenied(req.Env, req.Tool) {
-		return deny("tool %q is denied in env %q", req.Tool, req.Env)
-	}
-
-	// 3. Actions may only execute in the Execute phase (no scope creep).
-	if req.Phase != governance.PhaseExecute {
-		return deny("scope creep: action %q attempted in phase %q (allowed only in execute)", req.Tool, req.Phase)
-	}
-
-	// 4. The action must be approved (or policy auto-approved) and not already
-	//    executed. The approval binds to this exact action ID.
-	if pol.ApprovalRequired(req.Env, req.Tool) && (led == nil || !led.Satisfied(req.ActionID)) {
-		return deny("no approval on record for action %s (%s)", req.ActionID, req.Tool)
-	}
-	if led != nil && req.ActionID != "" && led.Status(req.ActionID) == governance.StatusExecuted {
-		return deny("action %s already executed (idempotency)", req.ActionID)
-	}
-
-	// 5. Final human gate (mode / allowlist / prompter).
-	if !g.approveByMode(req.Tool, req.Summary) {
-		return deny("operator declined %q", req.Tool)
-	}
-	return governance.Decision{Allow: true}
-}
-
-func deny(format string, args ...any) governance.Decision {
-	return governance.Decision{Allow: false, Reason: fmt.Sprintf(format, args...)}
 }
 
 // CycleMode advances the gate to the next permission mode and returns it.

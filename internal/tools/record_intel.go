@@ -14,7 +14,7 @@ var recordIntelDescription string
 
 // RecordIntel stores a piece of threat intelligence as a first-class brain
 // artifact and returns its ID. When run inside a hunt, the intel is linked back
-// to the hunt automatically. Class: case_write.
+// to the hunt automatically.
 type RecordIntel struct{ RC *RunContext }
 
 func (t *RecordIntel) Name() string        { return "record_intel" }
@@ -56,5 +56,5 @@ func (t *RecordIntel) Run(ctx context.Context, input json.RawMessage) (tool.Resu
 	if err != nil {
 		return tool.Errorf("failed to record intel: %v", err), nil
 	}
-	return tool.Text("recorded intel " + id + " — link it to hunts, alerts, or detections with link_artifacts"), nil
+	return tool.Text("recorded intel " + id + " — link it to hunts or detections with link_artifacts"), nil
 }

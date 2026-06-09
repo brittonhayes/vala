@@ -34,9 +34,7 @@ type Config struct {
 	// optimistically compacts the conversation before continuing. 0 disables it.
 	AutoCompactThreshold float64 `json:"auto_compact_threshold"`
 
-	// Env selects the policy environment for governed runs: dev | prod.
-	Env string `json:"env"`
-	// Notion holds the database IDs the case brain writes to. Empty IDs mean
+	// Notion holds the database IDs the hunt brain writes to. Empty IDs mean
 	// the brain runs in local (in-memory) mode.
 	Notion brain.DBIDs `json:"notion"`
 	// MCP lists the Model Context Protocol servers vala connects to for evidence
@@ -46,8 +44,6 @@ type Config struct {
 
 	// APIKey is read from the environment, never persisted.
 	APIKey string `json:"-"`
-	// SlackWebhook is read from SLACK_WEBHOOK_URL, never persisted.
-	SlackWebhook string `json:"-"`
 }
 
 // MCPServer describes one Model Context Protocol server vala connects to. The
@@ -74,7 +70,6 @@ func Default() Config {
 		Allowlist:     nil,
 		DetectionsDir: "detections",
 		MaxSteps:      50,
-		Env:           "dev",
 
 		ContextWindow:        200000,
 		AutoCompactThreshold: 0.80,
@@ -100,12 +95,6 @@ func Load(cwd string) (Config, error) {
 	}
 	if v := os.Getenv("VALA_PERMISSION"); v != "" {
 		cfg.Permission = v
-	}
-	if v := os.Getenv("VALA_ENV"); v != "" {
-		cfg.Env = v
-	}
-	if v := os.Getenv("SLACK_WEBHOOK_URL"); v != "" {
-		cfg.SlackWebhook = v
 	}
 	if v := os.Getenv("VALA_CONTEXT_WINDOW"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {

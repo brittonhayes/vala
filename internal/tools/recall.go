@@ -18,7 +18,6 @@ var recallDescription string
 // detections, and the backlog so the agent can check what is already known
 // before opening new work. It is the dedup/recall move that opens the hunt loop
 // and makes each hunt compound on the last instead of repeating settled ground.
-// Read-only (class: read).
 type Recall struct{ RC *RunContext }
 
 func (t *Recall) Name() string        { return "recall" }

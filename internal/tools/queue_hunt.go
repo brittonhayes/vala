@@ -14,8 +14,7 @@ var queueHuntDescription string
 
 // QueueHunt records a trigger as a prioritized hunt hypothesis on the backlog so
 // it is durable and rankable before anyone hunts it — the Scope step of the hunt
-// loop. open_hunt later pulls a backlog item into an active hunt. Class:
-// case_write.
+// loop. open_hunt later pulls a backlog item into an active hunt.
 type QueueHunt struct{ RC *RunContext }
 
 func (t *QueueHunt) Name() string        { return "queue_hunt" }

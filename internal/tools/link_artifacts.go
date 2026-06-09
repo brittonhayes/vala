@@ -13,7 +13,7 @@ var linkArtifactsDescription string
 
 // LinkArtifacts connects brain artifacts by setting a relation on a row to one
 // or more target row IDs — the mechanism that turns the brain into a connected
-// graph of intel, hunts, alerts, and detections. Class: case_write.
+// graph of intel, hunts, and detections.
 type LinkArtifacts struct{ RC *RunContext }
 
 func (t *LinkArtifacts) Name() string        { return "link_artifacts" }
@@ -24,7 +24,7 @@ func (t *LinkArtifacts) Schema() tool.Schema {
 	return tool.Schema{
 		Properties: map[string]any{
 			"from_id":  map[string]any{"type": "string", "description": "The row ID to set the relation on."},
-			"relation": map[string]any{"type": "string", "enum": []string{"evidence", "intel", "hunts", "alerts", "detections", "case"}, "description": "The relation property to set."},
+			"relation": map[string]any{"type": "string", "enum": []string{"evidence", "intel", "hunts", "detections"}, "description": "The relation property to set."},
 			"to_ids":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "The target row IDs to link to."},
 		},
 		Required: []string{"from_id", "relation", "to_ids"},

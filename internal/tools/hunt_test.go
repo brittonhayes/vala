@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	"github.com/brittonhayes/vala/internal/brain"
-	"github.com/brittonhayes/vala/internal/governance"
-	"github.com/brittonhayes/vala/internal/policy"
 )
 
 // newHuntRC opens a hunt in a fresh Mem-backed brain and returns the run context
@@ -20,7 +18,7 @@ func newHuntRC(t *testing.T) (*RunContext, *brain.Mem, string) {
 	if err != nil {
 		t.Fatalf("OpenHunt: %v", err)
 	}
-	rc := NewRunContext("dev", "", bc, governance.NewLedger(), policy.Default())
+	rc := NewRunContext(bc)
 	rc.SetHunt(huntID, "q")
 	return rc, mem, huntID
 }
@@ -28,7 +26,7 @@ func newHuntRC(t *testing.T) (*RunContext, *brain.Mem, string) {
 func TestQueueHuntTool(t *testing.T) {
 	mem := brain.NewMem()
 	bc := brain.New(mem)
-	rc := NewRunContext("dev", "", bc, governance.NewLedger(), policy.Default())
+	rc := NewRunContext(bc)
 	res := run(t, &QueueHunt{RC: rc}, map[string]any{
 		"trigger":     "fresh CVE",
 		"hypothesis":  "the CVE is being exploited in our env",
@@ -53,7 +51,7 @@ func TestQueueHuntTool(t *testing.T) {
 func TestOpenHuntConsumesBacklog(t *testing.T) {
 	mem := brain.NewMem()
 	bc := brain.New(mem)
-	rc := NewRunContext("dev", "", bc, governance.NewLedger(), policy.Default())
+	rc := NewRunContext(bc)
 	backlogID, err := bc.QueueHunt(context.Background(), brain.BacklogItem{Trigger: "tg", Hypothesis: "hp"})
 	if err != nil {
 		t.Fatalf("QueueHunt: %v", err)
@@ -177,7 +175,7 @@ func TestRecallTool(t *testing.T) {
 	if _, err := bc.RecordIntel(ctx, brain.Intel{Kind: brain.IntelTTP, Value: "attack.t1562.001"}); err != nil {
 		t.Fatalf("RecordIntel: %v", err)
 	}
-	rc := NewRunContext("dev", "", bc, governance.NewLedger(), policy.Default())
+	rc := NewRunContext(bc)
 	rec := &Recall{RC: rc}
 
 	// A scoped query surfaces the matching hunt and nothing else.
@@ -202,27 +200,5 @@ func TestRecallTool(t *testing.T) {
 	miss := run(t, rec, map[string]any{"query": "nonexistent-behavior"})
 	if miss.IsError || !strings.Contains(miss.Content, "new ground") {
 		t.Fatalf("expected a new-ground message, got: %q", miss.Content)
-	}
-}
-
-// TestRecallIsReadClass guards against policy drift: recall must be classified
-// read so it stays available during investigation and never requires approval.
-// Misclassification would default it to action_execute and hide it.
-func TestRecallIsReadClass(t *testing.T) {
-	if got := policy.Default().ClassOf("recall"); got != governance.ClassRead {
-		t.Errorf("recall class = %q, want %q", got, governance.ClassRead)
-	}
-}
-
-// TestHuntToolsAreCaseWrite guards against policy drift: every hunt/intel tool
-// must be classified case_write so it is exposed during the hunt phases and
-// never treated as a gated action. A tool missing from policy would default to
-// action_execute and silently disappear from the hunt.
-func TestHuntToolsAreCaseWrite(t *testing.T) {
-	pol := policy.Default()
-	for _, name := range []string{"queue_hunt", "open_hunt", "record_finding", "store_hunt", "record_intel", "link_artifacts"} {
-		if got := pol.ClassOf(name); got != governance.ClassCaseWrite {
-			t.Errorf("%s class = %q, want %q", name, got, governance.ClassCaseWrite)
-		}
 	}
 }

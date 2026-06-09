@@ -83,7 +83,7 @@ That graph is exactly what "Notion as the brain" is for.
 
 ## The insight that makes the system simple
 
-vala today advertises three co-equal jobs:
+vala originally advertised three co-equal jobs:
 
 ```
 Hunt threats   │   Author detections   │   Respond to alerts
@@ -99,9 +99,9 @@ trigger ─►  scope (ABLE)  ─►  hunt (evidence)  ─►  conclude  ─► 
 ```
 
 "Author detections" is not a peer of "hunt" — it is the **last 10 minutes of a
-confirmed hunt.** "Respond to alerts" is a different loop (it's reactive, and it's
-already well-served by vala's governed `open_case` runtime), but for a *focused
-hunting* product it's a secondary surface, not part of the core.
+confirmed hunt.** "Respond to alerts" is a different, reactive loop; it was once
+a secondary surface in vala (a governed `open_case` runtime) but has since been
+removed so the product is a focused hunting tool, not a SOC console.
 
 So the simple, focused system is: **one hunt loop, with detection as its Act
 phase, recorded end-to-end in Notion.**
@@ -165,9 +165,9 @@ against ("quality over quantity").
 
 ## Notion as the brain: trim to what the loop needs
 
-vala's brain has eight databases (Alerts, Cases, Evidence, Actions, Runs, Hunts,
-Intel, Detections). Half of those belong to the *response* loop. A focused
-hunting system needs a tight five-table graph:
+vala's brain is a tight five-table graph — exactly what the loop needs, and all
+that remains now that the response tables (Alerts, Cases, Actions, Runs) are
+gone:
 
 | Database | Role in the loop | Status today |
 |---|---|---|
@@ -187,9 +187,9 @@ Backlog ─►(opened as) Hunts ─►(produced) Detections
             Evidence ──(backs)── Hunts
 ```
 
-The four response tables (Alerts, Cases, Actions, Runs) stay in the codebase for
-the `open_case` runtime but are **not part of the hunting product's surface.**
-They light up only when someone hands vala an alert.
+The four response tables (Alerts, Cases, Actions, Runs) and the `open_case`
+runtime that used them have been **removed** — vala is a hunting tool, and the
+graph above is its entire surface.
 
 ---
 
@@ -238,10 +238,12 @@ no large refactor.
    returns an outcome-aware directive: a `Confirmed` verdict drives straight into
    authoring + linking a Sigma rule (or an explicit "no detection warranted"
    note); a `Refuted`/`Inconclusive` verdict explicitly does not.
-4. **Reframed the README** around the single loop and moved "Respond to alerts"
-   to a clearly secondary section. This continues the project's existing
-   narrowing (`7b80afd` reframing away from a detection-engineer persona,
-   `a191a0e` "don't ship detections").
+4. **Reframed the README** around the single loop. A later change removed the
+   alert/response feature entirely (the `respond`/`governance`/`policy`
+   packages, the case-response tools, and the four response tables), leaving a
+   hunting-only product. This continues the project's existing narrowing
+   (`7b80afd` reframing away from a detection-engineer persona, `a191a0e`
+   "don't ship detections").
 
 ## What to *not* build (staying focused)
 
@@ -250,8 +252,8 @@ no large refactor.
 - No automated deployment of detections to a SIEM. vala leaves a validated,
   tested Sigma rule in the user's `detections_dir`; deploying it is the user's
   pipeline, not vala's job.
-- No expansion of the response runtime. It exists, it's governed, it's good —
-  leave it as the secondary surface it should be.
+- No response runtime. The governed alert/case loop has been removed; vala is a
+  focused hunting tool, and responding to alerts is out of scope.
 
 ---
 

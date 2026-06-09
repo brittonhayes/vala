@@ -24,7 +24,7 @@ func TestSaveNotionPreservesUnrelatedKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ids := brain.DBIDs{Cases: "ds_cases", Hunts: "ds_hunts", Intel: "ds_intel", Parent: "page_1"}
+	ids := brain.DBIDs{Evidence: "ds_evidence", Hunts: "ds_hunts", Intel: "ds_intel", Parent: "page_1"}
 	if err := SaveNotion(dir, ids); err != nil {
 		t.Fatalf("SaveNotion: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestSaveNotionPreservesUnrelatedKeys(t *testing.T) {
 	if len(cfg.MCP) != 1 || cfg.MCP[0].Name != "scanner" {
 		t.Errorf("mcp dropped: %+v", cfg.MCP)
 	}
-	if cfg.Notion.Cases != "ds_cases" || cfg.Notion.Hunts != "ds_hunts" || cfg.Notion.Parent != "page_1" {
+	if cfg.Notion.Evidence != "ds_evidence" || cfg.Notion.Hunts != "ds_hunts" || cfg.Notion.Parent != "page_1" {
 		t.Errorf("notion IDs not written: %+v", cfg.Notion)
 	}
 
@@ -63,14 +63,14 @@ func TestSaveNotionPreservesUnrelatedKeys(t *testing.T) {
 // TestSaveNotionCreatesFile covers the clean-checkout path: no .vala.json yet.
 func TestSaveNotionCreatesFile(t *testing.T) {
 	dir := t.TempDir()
-	if err := SaveNotion(dir, brain.DBIDs{Cases: "ds_cases"}); err != nil {
+	if err := SaveNotion(dir, brain.DBIDs{Hunts: "ds_hunts"}); err != nil {
 		t.Fatalf("SaveNotion: %v", err)
 	}
 	cfg, err := Load(dir)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Notion.Cases != "ds_cases" {
-		t.Errorf("notion.cases = %q, want ds_cases", cfg.Notion.Cases)
+	if cfg.Notion.Hunts != "ds_hunts" {
+		t.Errorf("notion.hunts = %q, want ds_hunts", cfg.Notion.Hunts)
 	}
 }
