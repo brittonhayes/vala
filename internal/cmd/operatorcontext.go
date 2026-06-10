@@ -1,12 +1,70 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strings"
 
 	"github.com/brittonhayes/vala/internal/agent"
+	"github.com/brittonhayes/vala/internal/brain"
 )
+
+// teamMemoryLimit bounds how many shared memories are loaded into a session's
+// standing context — recent enough to prime a hunt without flooding the prompt.
+const teamMemoryLimit = 25
+
+// sessionContext assembles the trusted standing context a session opens with:
+// the operator-authored VALA.md plus the team's shared memories recalled from
+// the brain. Either part may be empty; the whole thing is empty when there is
+// nothing to say, and a brain read failure degrades to just VALA.md rather than
+// blocking startup.
+func sessionContext(ctx context.Context, cwd string, b *brain.Client) string {
+	var parts []string
+	if vala := agent.LoadOperatorContext(cwd); vala != "" {
+		parts = append(parts, "## From VALA.md\n\n"+vala)
+	}
+	if b != nil {
+		if mems, err := b.Memories(ctx, "", teamMemoryLimit); err == nil {
+			if rendered := renderMemories(mems); rendered != "" {
+				parts = append(parts, "## Team memory (shared brain)\n\n"+rendered)
+			}
+		}
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// renderMemories formats shared memories as attributed bullets, skipping any
+// that carry no fact.
+func renderMemories(mems []brain.Memory) string {
+	var b strings.Builder
+	for _, m := range mems {
+		fact := strings.TrimSpace(m.Fact)
+		if fact == "" {
+			continue
+		}
+		if author := strings.TrimSpace(m.Author); author != "" {
+			fmt.Fprintf(&b, "- (%s) %s\n", author, fact)
+		} else {
+			fmt.Fprintf(&b, "- %s\n", fact)
+		}
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// resolveAuthor identifies the operator a session runs as, for stamping shared
+// memories: an explicit VALA_AUTHOR wins, else the OS username, else "unknown".
+func resolveAuthor() string {
+	if a := strings.TrimSpace(os.Getenv("VALA_AUTHOR")); a != "" {
+		return a
+	}
+	if u, err := user.Current(); err == nil && u.Username != "" {
+		return u.Username
+	}
+	return "unknown"
+}
 
 // starterOperatorContext is the commented template vala writes for a new
 // VALA.md. It teaches the operator which standing facts pay off most — the

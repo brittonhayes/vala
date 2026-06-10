@@ -120,6 +120,17 @@ func Schema() []DBSpec {
 			Relations:     []RelationSpec{{"hunt", DBHunts}},
 			StatusOptions: map[string][]string{"status": {BacklogQueued, BacklogOpened, BacklogDone}},
 		},
+		{
+			Name:  DBMemory,
+			Title: "Vala Memory",
+			Props: []PropSpec{
+				{"memory_id", "title"},
+				{"fact", "rich_text"},
+				{"author", "rich_text"},
+				{"created_at", "date"},
+			},
+			Relations: []RelationSpec{{"hunt", DBHunts}},
+		},
 	}
 }
 
@@ -133,6 +144,7 @@ func DBIDsFromMap(ds map[string]string, parent string) DBIDs {
 		Intel:      ds[DBIntel],
 		Detections: ds[DBDetections],
 		Backlog:    ds[DBBacklog],
+		Memory:     ds[DBMemory],
 		Parent:     parent,
 	}
 }

@@ -97,21 +97,29 @@ and reuse what's there rather than duplicating it.
 
 ## Give it context
 
-The brain is what vala learns; **`VALA.md`** is what you already know. It's a
-plain Markdown file vala reads into every session — the standing context a hunter
-carries in their head: crown-jewel systems, where each log source lives, what
-"normal" looks like, detection naming conventions, prior incidents. Write it once
-and every hunt starts grounded in your environment instead of re-deriving it.
+vala opens every session with standing context about your environment, from two
+places:
+
+**`VALA.md`** is what you write by hand — a plain Markdown file vala reads into
+every session: crown-jewel systems, where each log source lives, what "normal"
+looks like, detection naming conventions, prior incidents. `vala init` drops a
+commented starter in your project; fill in what matters.
 
 ```
-your-repo/VALA.md   ← project context, version-controlled with the team
+your-repo/VALA.md        ← project context, version-controlled with the team
 ~/.config/vala/VALA.md   ← personal context, merged in first
 ```
 
-`vala init` drops a commented starter `VALA.md` in your project; fill in the
-sections that matter and delete the rest. Unlike query results and file
-contents — which vala treats as untrusted data — `VALA.md` is operator-authored,
-so vala trusts it as guidance.
+**Shared memory** is what vala learns as it hunts. When the agent discovers a
+durable fact — "auth logs live in Okta", "svc-deploy rotates keys nightly" — it
+calls `remember`, which writes that fact to the brain stamped with who learned
+it. Point a whole team at the same Notion brain and memory becomes **multiplayer**:
+one hunter's discovery primes everyone's next session. With a local brain it's
+still yours across sessions; ephemeral mode forgets it on exit.
+
+Unlike query results and file contents — which vala treats as untrusted data —
+both VALA.md and team memory are operator-authored, so vala trusts them as
+guidance.
 
 ## The hunt loop
 
@@ -196,7 +204,7 @@ Settings layer lowest-priority first: built-in defaults →
   ],
   "brain_file": "",
   "notion": {
-    "evidence": "", "hunts": "", "intel": "", "detections": "", "backlog": ""
+    "evidence": "", "hunts": "", "intel": "", "detections": "", "backlog": "", "memory": ""
   }
 }
 ```

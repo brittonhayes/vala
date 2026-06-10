@@ -17,6 +17,9 @@ type RunContext struct {
 	HuntID       string
 	HuntQuestion string
 	Brain        *brain.Client
+	// Author identifies the operator this session runs as; the remember tool
+	// stamps it onto shared memories so a team can see who learned what.
+	Author string
 
 	mu          sync.Mutex
 	evidence    []brain.Evidence

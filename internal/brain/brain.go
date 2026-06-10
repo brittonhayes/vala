@@ -8,6 +8,7 @@ const (
 	DBIntel      = "intel"
 	DBDetections = "detections"
 	DBBacklog    = "backlog"
+	DBMemory     = "memory"
 )
 
 // Hunt status values (the Hunts state machine). A hunt opens Open, and closes
@@ -52,6 +53,8 @@ func New(n Notion) *Client {
 				return ntn.DBs.Detections
 			case DBBacklog:
 				return ntn.DBs.Backlog
+			case DBMemory:
+				return ntn.DBs.Memory
 			}
 			return logical
 		}

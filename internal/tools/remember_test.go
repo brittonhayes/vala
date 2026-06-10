@@ -2,73 +2,61 @@ package tools
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/brittonhayes/vala/internal/agent"
+	"github.com/brittonhayes/vala/internal/brain"
 )
 
-// TestRememberCreatesAndAppends covers the compounding path: the first fact
-// creates VALA.md with a Remembered section, and a second fact joins it under
-// the same heading rather than starting a new one.
-func TestRememberCreatesAndAppends(t *testing.T) {
-	dir := t.TempDir()
-	tl := &Remember{Dir: dir}
-	ctx := context.Background()
+// TestRememberWritesSharedMemory covers the multiplayer write: a remembered fact
+// lands in the brain stamped with the operator, where it can be recalled — by
+// this session or a teammate's pointed at the same brain.
+func TestRememberWritesSharedMemory(t *testing.T) {
+	mem := brain.NewMem()
+	rc := NewRunContext(brain.New(mem))
+	rc.Author = "alice"
+	rc.SetHunt("hunts_0001", "did anyone disable GuardDuty?")
 
-	if res, err := tl.Run(ctx, []byte(`{"fact":"auth logs live in Okta"}`)); err != nil || res.IsError {
-		t.Fatalf("first remember failed: %v %q", err, res.Content)
+	res := run(t, &Remember{RC: rc}, map[string]any{"fact": "auth logs live in Okta"})
+	if res.IsError {
+		t.Fatalf("remember errored: %q", res.Content)
 	}
-	if res, err := tl.Run(ctx, []byte(`{"fact":"svc-deploy rotates keys nightly"}`)); err != nil || res.IsError {
-		t.Fatalf("second remember failed: %v %q", err, res.Content)
+	if !strings.Contains(res.Content, "alice") {
+		t.Fatalf("result should name the author: %q", res.Content)
 	}
 
-	data, err := os.ReadFile(filepath.Join(dir, agent.OperatorContextFile))
+	rows := mem.RowsIn(brain.DBMemory)
+	if len(rows) != 1 {
+		t.Fatalf("want 1 memory row, got %d", len(rows))
+	}
+	if got := rows[0].Props["fact"]; got != "auth logs live in Okta" {
+		t.Fatalf("fact not stored: %v", got)
+	}
+	if got := rows[0].Props["author"]; got != "alice" {
+		t.Fatalf("author not stamped: %v", got)
+	}
+
+	// The fact is readable back through the typed Memories accessor.
+	mems, err := rc.Brain.Memories(context.Background(), "Okta", 5)
 	if err != nil {
-		t.Fatalf("read VALA.md: %v", err)
+		t.Fatalf("Memories: %v", err)
 	}
-	got := string(data)
-	if strings.Count(got, rememberSection) != 1 {
-		t.Fatalf("want exactly one Remembered section, got:\n%s", got)
-	}
-	if !strings.Contains(got, "- auth logs live in Okta") || !strings.Contains(got, "- svc-deploy rotates keys nightly") {
-		t.Fatalf("both facts should be present:\n%s", got)
-	}
-}
-
-// TestRememberPreservesExistingSections asserts a fact lands under the
-// Remembered heading without disturbing operator-authored sections.
-func TestRememberPreservesExistingSections(t *testing.T) {
-	dir := t.TempDir()
-	seed := "# vala operator context\n\n## Environment\nProd AWS org.\n"
-	if err := os.WriteFile(filepath.Join(dir, agent.OperatorContextFile), []byte(seed), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	tl := &Remember{Dir: dir}
-	if res, err := tl.Run(context.Background(), []byte(`{"fact":"CloudTrail is multi-region"}`)); err != nil || res.IsError {
-		t.Fatalf("remember failed: %v %q", err, res.Content)
-	}
-
-	data, _ := os.ReadFile(filepath.Join(dir, agent.OperatorContextFile))
-	got := string(data)
-	if !strings.Contains(got, "## Environment\nProd AWS org.") {
-		t.Fatalf("existing section was disturbed:\n%s", got)
-	}
-	if !strings.Contains(got, rememberSection+"\n\n- CloudTrail is multi-region") {
-		t.Fatalf("fact not placed under Remembered section:\n%s", got)
+	if len(mems) != 1 || mems[0].Author != "alice" {
+		t.Fatalf("recall did not return the shared memory: %+v", mems)
 	}
 }
 
 func TestRememberRejectsEmptyFact(t *testing.T) {
-	tl := &Remember{Dir: t.TempDir()}
-	res, err := tl.Run(context.Background(), []byte(`{"fact":"  "}`))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	rc := NewRunContext(brain.New(brain.NewMem()))
+	res := run(t, &Remember{RC: rc}, map[string]any{"fact": "  "})
 	if !res.IsError {
 		t.Fatal("empty fact should be rejected")
+	}
+}
+
+func TestRememberNeedsBrain(t *testing.T) {
+	res := run(t, &Remember{RC: &RunContext{}}, map[string]any{"fact": "x"})
+	if !res.IsError {
+		t.Fatal("remember without a brain should error")
 	}
 }

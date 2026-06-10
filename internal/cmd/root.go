@@ -64,7 +64,8 @@ single non-interactive task.`,
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "warning: transcript disabled:", err)
 		}
-		ag := agent.New(built.client, built.registry, built.gate, built.cwd, built.cfg.MaxSteps)
+		ag := agent.New(built.client, built.registry, built.gate, built.cwd, built.cfg.MaxSteps,
+			sessionContext(cmd.Context(), built.cwd, built.rc.Brain))
 		repl := ui.New(ag, built.gate, sess, built.client.Model(), built.cfg.ContextWindow, built.cfg.AutoCompactThreshold)
 		return repl.Run(cmd.Context())
 	},
@@ -93,6 +94,7 @@ type built struct {
 	client   *llm.Client
 	registry *tool.Registry
 	gate     *permission.Gate
+	rc       *tools.RunContext
 }
 
 // resolveConfig loads config for the current directory and applies persistent
@@ -135,11 +137,12 @@ func build() (*built, error) {
 	evidence := connectMCP(cfg)
 
 	// The session RunContext the hunt/intel tools write through. open_hunt sets
-	// its active hunt at runtime.
+	// its active hunt at runtime; Author stamps shared memories with this operator.
 	rc := tools.NewRunContext(brain.New(brainStore(cfg, cwd)))
+	rc.Author = resolveAuthor()
 	registry := tools.Toolbox(cwd, rc, evidence...)
 
-	return &built{cfg: cfg, cwd: cwd, client: client, registry: registry, gate: gate}, nil
+	return &built{cfg: cfg, cwd: cwd, client: client, registry: registry, gate: gate, rc: rc}, nil
 }
 
 // brainStore selects the brain backend: an NTN-backed store when Notion DB IDs

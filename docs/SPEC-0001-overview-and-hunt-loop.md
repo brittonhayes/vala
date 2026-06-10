@@ -130,7 +130,7 @@ and why the backlog is a first-class table (R-0001-06,
   only as primitives the agent composes (`internal/tools/toolbox.go`).
 - **A-0001-03** (R-0001-03) The tree contains no alert/case/response runtime
   package and no response tables in the brain schema (`brain.Schema()` lists
-  exactly five stores: evidence, hunts, intel, detections, backlog).
+  exactly six stores: evidence, hunts, intel, detections, backlog, memory).
 - **A-0001-04** (R-0001-01) `validate_detection` and `test_detection` run with
   no network access and no external binary (`internal/detect`); `go test ./internal/detect/...`
   passes offline.

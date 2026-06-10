@@ -18,7 +18,7 @@ not a code listing — it is the set of promises that code must keep.
 | Spec | Title | Scope |
 |---|---|---|
 | [SPEC-0001](SPEC-0001-overview-and-hunt-loop.md) | Overview & the Hunt Loop | What vala is; the Scope → Hunt → Conclude → Automate loop |
-| [SPEC-0002](SPEC-0002-brain-and-persistence.md) | Brain & Persistence | The five-table graph, in-memory vs Notion, provisioning |
+| [SPEC-0002](SPEC-0002-brain-and-persistence.md) | Brain & Persistence | The six-table graph, in-memory vs file vs Notion, shared memory, provisioning |
 | [SPEC-0003](SPEC-0003-tool-harness.md) | Tool Harness | The `Tool` interface, registry, permission gating, the toolbox |
 | [SPEC-0004](SPEC-0004-hunting-workflow.md) | Hunting Workflow | `recall`, `queue_hunt`, `open_hunt`, `record_finding`, `record_intel`, `link_artifacts`, `store_hunt` |
 | [SPEC-0005](SPEC-0005-detection-engine.md) | Detection Engine | Offline Sigma validation, condition grammar, field matching, tests |

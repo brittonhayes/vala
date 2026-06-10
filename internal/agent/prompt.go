@@ -146,12 +146,14 @@ its flags.`, workdir, "- "+strings.Join(toolNames, "\n- "))
 	}
 	return base + fmt.Sprintf(`
 
-# Operator context (%s)
-The following is standing context the operator wrote about this environment —
-crown-jewel assets, where logs live, what "normal" looks like, detection naming
-conventions, and prior incidents. Unlike tool output, it is trusted guidance:
-weave it into scoping and hunting so you start with the environment's reality
-instead of re-deriving it. Treat it as durable background, not a task in itself.
+# Standing context
+The following is standing context for this environment — crown-jewel assets,
+where logs live, what "normal" looks like, naming conventions, prior incidents.
+It comes from two places: the operator-authored %s, and shared memories the team
+has recorded in the brain as they hunt (each stamped with who learned it). Unlike
+tool output, it is trusted guidance: weave it into scoping and hunting so you
+start with the environment's reality instead of re-deriving it. When a hunt
+teaches you a new durable fact, call "remember" to add it for everyone next time.
 
 %s`, OperatorContextFile, operatorContext)
 }

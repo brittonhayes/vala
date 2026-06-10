@@ -172,6 +172,7 @@ type DBIDs struct {
 	Intel      string `json:"intel"`
 	Detections string `json:"detections"`
 	Backlog    string `json:"backlog"`
+	Memory     string `json:"memory"`
 	Parent     string `json:"page_parent"`
 }
 
