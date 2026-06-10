@@ -80,7 +80,7 @@ func New(client *llm.Client, registry *tool.Registry, gate *permission.Gate, wor
 		llm:      client,
 		registry: registry,
 		gate:     gate,
-		system:   SystemPrompt(workdir, names),
+		system:   SystemPrompt(workdir, names, LoadOperatorContext(workdir)),
 		maxSteps: maxSteps,
 	}
 }

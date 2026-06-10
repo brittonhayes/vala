@@ -87,6 +87,24 @@ verify and reuse what's there rather than duplicating it.
 > (`ntn login`). Until you run it, vala reminds you on startup that it's in
 > memory-only mode (silence it with `--no-init-prompt`).
 
+## Give it context
+
+The brain is what vala learns; **`VALA.md`** is what you already know. It's a
+plain Markdown file vala reads into every session — the standing context a hunter
+carries in their head: crown-jewel systems, where each log source lives, what
+"normal" looks like, detection naming conventions, prior incidents. Write it once
+and every hunt starts grounded in your environment instead of re-deriving it.
+
+```
+your-repo/VALA.md   ← project context, version-controlled with the team
+~/.config/vala/VALA.md   ← personal context, merged in first
+```
+
+`vala init` drops a commented starter `VALA.md` in your project; fill in the
+sections that matter and delete the rest. Unlike query results and file
+contents — which vala treats as untrusted data — `VALA.md` is operator-authored,
+so vala trusts it as guidance.
+
 ## The hunt loop
 
 vala runs a single loop, shaped after the frameworks every hunt team knows —

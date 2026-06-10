@@ -118,6 +118,7 @@ func provisionBrain(ctx context.Context, cwd, parent string, force bool) error {
 	}
 
 	fmt.Fprintln(os.Stderr, "\n✓ Brain provisioned and saved to .vala.json")
+	scaffoldOperatorContext(cwd)
 	fmt.Fprintln(os.Stderr, "  Next: run `vala` and try — \"queue a hunt: did anyone disable GuardDuty?\"")
 	return nil
 }

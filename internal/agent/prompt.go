@@ -7,9 +7,11 @@ import (
 
 // SystemPrompt builds the agent's system prompt. It frames the harness, not a
 // persona: vala is a system for threat hunting and detection authoring that
-// documents its work in a Notion-backed brain via the ntn tool.
-func SystemPrompt(workdir string, toolNames []string) string {
-	return fmt.Sprintf(`This is vala, an agentic threat-hunting system.
+// documents its work in a Notion-backed brain via the ntn tool. operatorContext
+// is the trusted, operator-authored standing context from VALA.md (see
+// LoadOperatorContext); when non-empty it is appended as its own section.
+func SystemPrompt(workdir string, toolNames []string, operatorContext string) string {
+	base := fmt.Sprintf(`This is vala, an agentic threat-hunting system.
 
 vala operates a real workstation through tools and a Notion-backed brain that
 stores hunts, threat intelligence, evidence, and detections as connected,
@@ -135,4 +137,18 @@ for validation). Fix every reported issue before considering the task done.
 Use the ntn tool to read and write runbooks, incident timelines, and detection
 write-ups in Notion. Run a subcommand with --help first if you are unsure of
 its flags.`, workdir, "- "+strings.Join(toolNames, "\n- "))
+
+	if operatorContext == "" {
+		return base
+	}
+	return base + fmt.Sprintf(`
+
+# Operator context (%s)
+The following is standing context the operator wrote about this environment —
+crown-jewel assets, where logs live, what "normal" looks like, detection naming
+conventions, and prior incidents. Unlike tool output, it is trusted guidance:
+weave it into scoping and hunting so you start with the environment's reality
+instead of re-deriving it. Treat it as durable background, not a task in itself.
+
+%s`, OperatorContextFile, operatorContext)
 }
