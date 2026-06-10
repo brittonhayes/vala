@@ -31,7 +31,8 @@ vala at a Notion workspace (that is [SPEC-0009](SPEC-0009-configuration.md)).
 - **Relation** — a property whose value is a list of row IDs, forming a graph
   edge between stores.
 - **Backend** — the concrete storage implementing the `Notion` interface: `Mem`
-  (in-memory) or `NTN` (a real Notion workspace via the `ntn` CLI / API).
+  (in-memory), `File` (a JSON file on disk), or `NTN` (a real Notion workspace
+  via the `ntn` CLI / API).
 - **Data-source ID** — Notion's identifier for the queryable schema behind a
   database; the brain reads and writes against data-source IDs, not database IDs.
 
@@ -67,9 +68,10 @@ vala at a Notion workspace (that is [SPEC-0009](SPEC-0009-configuration.md)).
 - **R-0002-08** Both backends MUST implement one `Notion` interface so the brain
   client is backend-agnostic. The four methods are `CreateRow`, `UpdateRow`,
   `CreatePage`, `Query`.
-- **R-0002-09** With no Notion configured, vala MUST run in an ephemeral
-  in-memory brain (`Mem`) — fully functional, forgotten on exit. Configuration
-  selects `NTN`; nothing else changes for callers.
+- **R-0002-09** With no brain configured, vala MUST run in an ephemeral in-memory
+  brain (`Mem`) — fully functional, forgotten on exit. A configured `brain_file`
+  selects the durable `File` backend; configured Notion IDs select `NTN`. Nothing
+  else changes for callers: every backend implements the same `Notion` interface.
 - **R-0002-10** For the `NTN` backend, the brain client MUST translate logical
   store names to the configured Notion data-source IDs; for `Mem` it MUST use
   the logical names directly.
@@ -225,6 +227,12 @@ in-memory; `NTN` queries the data source and filters client-side.
 - **Mem** (`NewMem`) — synthetic IDs (`{db}_{seq}`), pages at `mem://{id}`,
   mutex-guarded, no network. Used in tests and unconfigured runs. Exposes
   `RowsIn(db)` for assertions.
+- **File** (`NewFile`) — the same synthetic-ID, substring-query semantics as
+  `Mem`, persisted to a single JSON file written atomically (temp + rename) on
+  every mutation and reloaded on open, so the ID sequence and rows survive across
+  sessions. Narrative pages are written as readable `.md` files in a `pages`
+  directory beside the JSON. Selected by the `brain_file` config key
+  (`vala init --local`); a durable brain with no external account.
 - **NTN** — shells the operator's authenticated `ntn` CLI / Notion API. Holds a
   `DBIDs` struct (one data-source ID per store + a narrative parent page ID),
   lazily caches each data source's property schema, and coerces flat props into
@@ -267,7 +275,7 @@ in-memory; `NTN` queries the data source and filters client-side.
   richer querying is the operator's job in Notion directly.
 - **No schema migration.** Changing `Schema()` against an already-provisioned
   workspace is not auto-migrated; the operator re-provisions.
-- **No backend beyond Mem and NTN.** Other stores are out of scope.
+- **No backend beyond Mem, File, and NTN.** Other stores are out of scope.
 
 ## 7. Open questions
 

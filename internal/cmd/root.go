@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/brittonhayes/vala/internal/agent"
 	"github.com/brittonhayes/vala/internal/brain"
@@ -141,13 +142,28 @@ func build() (*built, error) {
 	return &built{cfg: cfg, cwd: cwd, client: client, registry: registry, gate: gate}, nil
 }
 
-// brainStore returns an NTN-backed store when Notion DB IDs are configured,
-// otherwise an in-memory store for local runs.
+// brainStore selects the brain backend: an NTN-backed store when Notion DB IDs
+// are configured, a durable file-backed store when a brain file is set, and an
+// ephemeral in-memory store otherwise. A file that fails to open degrades to
+// in-memory with a warning rather than blocking the session.
 func brainStore(cfg config.Config, cwd string) brain.Notion {
-	if brainConfigured(cfg) {
+	switch {
+	case brainConfigured(cfg):
 		return &brain.NTN{Dir: cwd, DBs: cfg.Notion}
+	case cfg.BrainFile != "":
+		path := cfg.BrainFile
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(cwd, path)
+		}
+		f, err := brain.NewFile(path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "⚠ could not open brain file %s: %v — using ephemeral memory\n", path, err)
+			return brain.NewMem()
+		}
+		return f
+	default:
+		return brain.NewMem()
 	}
-	return brain.NewMem()
 }
 
 // connectMCP dials every configured MCP server, discovers its tools, and returns

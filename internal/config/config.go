@@ -35,8 +35,13 @@ type Config struct {
 	AutoCompactThreshold float64 `json:"auto_compact_threshold"`
 
 	// Notion holds the database IDs the hunt brain writes to. Empty IDs mean
-	// the brain runs in local (in-memory) mode.
+	// the brain runs in local mode (file-backed if BrainFile is set, else
+	// in-memory).
 	Notion brain.DBIDs `json:"notion"`
+	// BrainFile, when set and no Notion brain is configured, persists the brain
+	// to a JSON file on disk instead of the ephemeral in-memory store — a durable
+	// brain with no Notion account. A relative path resolves against the project.
+	BrainFile string `json:"brain_file"`
 	// MCP lists the Model Context Protocol servers vala connects to for evidence
 	// (e.g. Scanner's security data lake). Each server's tools are discovered at
 	// startup and exposed to the agent. Empty means no remote evidence source.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/brittonhayes/vala/internal/brain"
 	"github.com/brittonhayes/vala/internal/config"
@@ -11,9 +12,14 @@ import (
 )
 
 var (
-	flagInitParent string
-	flagInitForce  bool
+	flagInitParent    string
+	flagInitForce     bool
+	flagInitLocal     bool
+	flagInitBrainFile string
 )
+
+// defaultBrainFile is where a local file-backed brain lives inside a project.
+const defaultBrainFile = ".vala/brain.json"
 
 var initCmd = &cobra.Command{
 	Use:   "init",
@@ -28,6 +34,10 @@ created under the page given by --parent (you are prompted if it is omitted).
 A second run is idempotent: existing IDs are verified and reused rather than
 duplicated. Use --force to re-provision from scratch.
 
+Prefer no external accounts? "vala init --local" sets up a durable on-disk brain
+in a single JSON file instead — your hunts persist across sessions with nothing
+to log into.
+
 Secrets are never written to .vala.json — only database IDs. Notion auth stays
 in the ntn CLI's own credential store.`,
 	SilenceUsage:  true,
@@ -37,6 +47,9 @@ in the ntn CLI's own credential store.`,
 		if err != nil {
 			return err
 		}
+		if flagInitLocal {
+			return provisionLocalBrain(cwd, flagInitBrainFile)
+		}
 		return provisionBrain(cmd.Context(), cwd, flagInitParent, flagInitForce)
 	},
 }
@@ -44,6 +57,33 @@ in the ntn CLI's own credential store.`,
 func init() {
 	initCmd.Flags().StringVar(&flagInitParent, "parent", "", "Notion page ID to create the brain under (prompted if omitted)")
 	initCmd.Flags().BoolVar(&flagInitForce, "force", false, "re-provision even if .vala.json already has a brain configured")
+	initCmd.Flags().BoolVar(&flagInitLocal, "local", false, "set up a persistent on-disk brain with no Notion account")
+	initCmd.Flags().StringVar(&flagInitBrainFile, "brain-file", "", "path for the --local brain file (default "+defaultBrainFile+")")
+}
+
+// provisionLocalBrain sets up a durable on-disk brain with no Notion account: it
+// records the brain-file path in .vala.json and scaffolds a starter VALA.md. The
+// JSON file itself is created lazily on the first hunt. This is the
+// zero-dependency path to a persistent brain.
+func provisionLocalBrain(cwd, brainFile string) error {
+	if brainFile == "" {
+		brainFile = defaultBrainFile
+	}
+	if err := config.SaveBrainFile(cwd, brainFile); err != nil {
+		return fmt.Errorf("write .vala.json: %w", err)
+	}
+	// Validate the path resolves to an openable brain before we report success.
+	path := brainFile
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(cwd, path)
+	}
+	if _, err := brain.NewFile(path); err != nil {
+		return fmt.Errorf("prepare brain file: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "✓ Local brain configured at %s — hunts now persist across sessions\n", brainFile)
+	scaffoldOperatorContext(cwd)
+	fmt.Fprintln(os.Stderr, "  Next: run `vala` and try — \"queue a hunt: did anyone disable GuardDuty?\"")
+	return nil
 }
 
 // provisionBrain runs the full init flow: preflight, idempotency check, create

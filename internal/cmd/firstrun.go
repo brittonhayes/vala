@@ -27,9 +27,10 @@ func brainConfigured(cfg config.Config) bool {
 	return n.Hunts != "" || n.Intel != "" || n.Evidence != ""
 }
 
-const ephemeralNotice = `⚠ No Notion brain is configured — running in ephemeral in-memory mode.
+const ephemeralNotice = `⚠ No brain is configured — running in ephemeral in-memory mode.
   Hunts, intel, evidence, and detections will NOT persist; they vanish on exit.
-  Run ` + "`vala init`" + ` once to provision a persistent Notion-backed brain.`
+  Run ` + "`vala init --local`" + ` for a persistent on-disk brain (no account),
+  or ` + "`vala init`" + ` to provision a Notion-backed brain.`
 
 // firstRunNotice warns when the brain is unconfigured (ephemeral in-memory).
 // In an interactive session it offers to run `vala init` now; otherwise it
@@ -38,7 +39,7 @@ const ephemeralNotice = `⚠ No Notion brain is configured — running in epheme
 // error. The notice is suppressed by --no-init-prompt or a prior dismissal
 // recorded for this project so a deliberate in-memory user is not nagged.
 func firstRunNotice(ctx context.Context, cfg config.Config, cwd string, interactive bool) error {
-	if brainConfigured(cfg) {
+	if brainConfigured(cfg) || cfg.BrainFile != "" {
 		return nil
 	}
 	if flagRequireBrain {
@@ -54,8 +55,8 @@ func firstRunNotice(ctx context.Context, cfg config.Config, cwd string, interact
 		return nil
 	}
 
-	if promptYesNo("Run `vala init` now to set up a persistent brain? [y/N] ") {
-		return provisionBrain(ctx, cwd, "", false)
+	if promptYesNo("Set up a persistent on-disk brain now (no account needed)? [y/N] ") {
+		return provisionLocalBrain(cwd, "")
 	}
 	// Declined: remember it so we don't prompt on every launch.
 	dismissInitPrompt(cwd)

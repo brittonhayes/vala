@@ -10,10 +10,23 @@ import (
 
 // SaveNotion merges the provisioned Notion data-source IDs into the project's
 // .vala.json, setting only the "notion" key and preserving every other key
-// (model, mcp, detections_dir, …) byte-for-byte. The file is created if absent
-// and pretty-printed. Secrets are never written here — they stay in the
-// environment, as the config comments require.
+// (model, mcp, detections_dir, …) byte-for-byte.
 func SaveNotion(cwd string, ids brain.DBIDs) error {
+	return saveKey(cwd, "notion", ids)
+}
+
+// SaveBrainFile records the local brain-file path in .vala.json (the
+// "brain_file" key) so a file-backed brain persists across runs without a Notion
+// account, preserving every other key.
+func SaveBrainFile(cwd, brainFile string) error {
+	return saveKey(cwd, "brain_file", brainFile)
+}
+
+// saveKey sets a single top-level key in the project's .vala.json while
+// preserving every other key byte-for-byte. The file is created if absent and
+// pretty-printed. Secrets are never written here — they stay in the environment,
+// as the config comments require.
+func saveKey(cwd, key string, value any) error {
 	path := filepath.Join(cwd, ".vala.json")
 
 	// Decode into ordered-agnostic raw messages so unrelated keys round-trip
@@ -29,11 +42,11 @@ func SaveNotion(cwd string, ids brain.DBIDs) error {
 		return err
 	}
 
-	notion, err := json.Marshal(ids)
+	v, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	raw["notion"] = notion
+	raw[key] = v
 
 	out, err := json.MarshalIndent(raw, "", "  ")
 	if err != nil {
