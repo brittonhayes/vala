@@ -98,6 +98,7 @@ permission gate ([SPEC-0011](SPEC-0011-permissions-and-safety.md)).
 |---|---|---|
 | `vala` | interactive REPL | persistent flags below |
 | `vala run <prompt...>` | one-shot task | `--yes`, + persistent |
+| `vala setup` | guided onboarding (provider, brain, evidence) | + persistent |
 | `vala connect [provider]` | connect/select an LLM provider | + persistent |
 | `vala init` | provision Notion brain | `--parent`, `--force`, + persistent |
 | `vala version` | print version | — |

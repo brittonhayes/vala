@@ -26,7 +26,7 @@ to prompt). Pass --yes to auto-approve every tool call for an unattended run.`,
 		// going (automation must not block) unless --require-brain is set.
 		if cfg, cwd, err := resolveConfig(); err != nil {
 			return err
-		} else if err := firstRunNotice(cmd.Context(), cfg, cwd, false); err != nil {
+		} else if err := firstRunNotice(cfg, cwd); err != nil {
 			return err
 		}
 		built, err := build()

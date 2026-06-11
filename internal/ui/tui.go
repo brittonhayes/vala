@@ -490,9 +490,35 @@ func (m chatModel) banner() string {
 	if p := m.repl.Session.Path(); p != "" {
 		b.WriteString("\n  " + m.styles.Hint.Render("transcript · "+p))
 	}
+	if line := m.evidenceLine(); line != "" {
+		b.WriteString("\n  " + line)
+	}
 	b.WriteString("\n  " + m.styles.Hint.Render(`type a request · /help for commands · "exit" to quit`))
 	b.WriteString("\n  " + m.styles.Rule.Render(strings.Repeat("─", 52)))
 	return b.String()
+}
+
+// evidenceLine renders the connected-evidence summary for the banner, e.g.
+// "evidence · scanner ✓ 4 tools · wiz ✗ command not found". When no sources are
+// configured it nudges the operator toward connecting one rather than leaving a
+// silent gap. Failures are shown inline so a non-connecting source is never
+// swallowed behind the alt-screen.
+func (m chatModel) evidenceLine() string {
+	if len(m.repl.Evidence) == 0 {
+		return m.styles.Hint.Render("evidence · none connected · ") +
+			m.styles.ToolMeta.Render("run `vala setup` to add a source")
+	}
+	parts := make([]string, 0, len(m.repl.Evidence))
+	for _, e := range m.repl.Evidence {
+		if e.OK() {
+			parts = append(parts, m.styles.ToolCall.Render(e.Name)+" "+
+				m.styles.Prompt.Render("✓")+" "+m.styles.ToolMeta.Render(fmt.Sprintf("%d tools", e.Tools)))
+			continue
+		}
+		parts = append(parts, m.styles.ToolMeta.Render(e.Name)+" "+
+			m.styles.Error.Render("✗")+" "+m.styles.ResultErr.Render(oneLine(e.Err.Error(), 60)))
+	}
+	return m.styles.Hint.Render("evidence · ") + strings.Join(parts, m.styles.Hint.Render(" · "))
 }
 
 // renderResult formats a tool result as a dim, gutter-framed block.

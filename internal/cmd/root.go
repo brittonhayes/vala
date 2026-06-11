@@ -51,10 +51,19 @@ single non-interactive task.`,
 		if err != nil {
 			return err
 		}
-		// First-run brain check: when no Notion brain is configured, warn that
-		// the session is ephemeral and (in a TTY) offer to run `vala init`.
-		interactive := term.IsTerminal(int(os.Stdin.Fd()))
-		if err := firstRunNotice(cmd.Context(), cfg, cwd, interactive); err != nil {
+		// First-run onboarding: in a TTY, launch the curated wizard whenever a
+		// surface (provider, brain, or evidence) is unconfigured so the operator is
+		// guided to a working tool. Non-interactive sessions fall back to a stderr
+		// summary so automation is never blocked.
+		if term.IsTerminal(int(os.Stdin.Fd())) {
+			proceed, err := maybeRunSetup(cmd.Context(), cfg, cwd, false)
+			if err != nil {
+				return err
+			}
+			if !proceed {
+				return nil
+			}
+		} else if err := firstRunNotice(cfg, cwd); err != nil {
 			return err
 		}
 		built, err := build()
@@ -68,6 +77,7 @@ single non-interactive task.`,
 		ag := agent.New(built.client, built.registry, built.gate, built.cwd, built.cfg.MaxSteps,
 			sessionContext(cmd.Context(), built.cwd, built.rc.Brain))
 		repl := ui.New(ag, built.gate, sess, modelLabel(built.client), contextWindow(built.client, built.cfg), built.cfg.AutoCompactThreshold)
+		repl.Evidence = built.evidence
 		// Wire /connect: rebuild a provider from the latest stored credentials so
 		// the operator can connect or switch providers without leaving the session.
 		repl.Connect = func(provider, model string) (llm.Provider, error) {
@@ -101,6 +111,9 @@ type built struct {
 	registry *tool.Registry
 	gate     *permission.Gate
 	rc       *tools.RunContext
+	// evidence reports how each configured MCP source connected, so the session
+	// can show the operator what is (and is not) available to hunt in.
+	evidence []mcp.EvidenceStatus
 	// connectErr is set (and client left nil) when no provider credential is
 	// available yet, so the interactive REPL can launch and offer /connect while
 	// unattended commands can fail closed.
@@ -152,7 +165,7 @@ func build() (*built, error) {
 
 	// Connect configured MCP servers (e.g. Scanner) and discover their evidence
 	// tools so they show up during a hunt.
-	evidence := connectMCP(cfg)
+	evidence, evidenceStatus := connectMCP(cfg)
 
 	// The session RunContext the hunt/intel tools write through. open_hunt sets
 	// its active hunt at runtime; Author stamps shared memories with this operator.
@@ -160,7 +173,7 @@ func build() (*built, error) {
 	rc.Author = resolveAuthor()
 	registry := tools.Toolbox(cwd, rc, evidence...)
 
-	return &built{cfg: cfg, cwd: cwd, client: client, registry: registry, gate: gate, rc: rc, connectErr: connectErr}, nil
+	return &built{cfg: cfg, cwd: cwd, client: client, registry: registry, gate: gate, rc: rc, evidence: evidenceStatus, connectErr: connectErr}, nil
 }
 
 // modelLabel renders the active provider and model for the session banner,
@@ -220,24 +233,32 @@ func brainStore(cfg config.Config, cwd string) brain.Notion {
 }
 
 // connectMCP dials every configured MCP server, discovers its tools, and returns
-// them as vala tools. A server that fails to connect is logged and skipped —
-// vala keeps running, just without that evidence source. The sessions live for
-// the process lifetime.
-func connectMCP(cfg config.Config) []tool.Tool {
+// them as vala tools alongside a per-server status report. A server that fails
+// to connect is recorded in the status (not fatal) so the session can show the
+// operator what is and isn't connected — vala keeps running, just without that
+// evidence source. The sessions live for the process lifetime.
+func connectMCP(cfg config.Config) ([]tool.Tool, []mcp.EvidenceStatus) {
 	var evidence []tool.Tool
+	var report []mcp.EvidenceStatus
 	for _, srv := range cfg.MCP {
-		sess, err := mcp.Connect(context.Background(), mcp.ServerConfig{Name: srv.Name, URL: srv.URL, APIKey: srv.APIKey})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: mcp server %q unavailable: %v\n", srv.Name, err)
-			continue
-		}
-		ts, _, err := tools.MCPToolsFrom(context.Background(), sess)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: mcp server %q: discover tools: %v\n", srv.Name, err)
-			_ = sess.Close()
-			continue
-		}
+		ts, status := tools.ConnectEvidence(context.Background(), serverConfig(srv))
 		evidence = append(evidence, ts...)
+		report = append(report, status)
 	}
-	return evidence
+	return evidence, report
+}
+
+// serverConfig maps a persisted MCP server entry to the mcp package's transport
+// config, carrying the secrets resolved from the environment at load time.
+func serverConfig(srv config.MCPServer) mcp.ServerConfig {
+	return mcp.ServerConfig{
+		Name:      srv.Name,
+		Transport: srv.Transport,
+		URL:       srv.URL,
+		APIKey:    srv.APIKey,
+		OAuth:     srv.OAuth,
+		Command:   srv.Command,
+		Args:      srv.Args,
+		Env:       srv.Env,
+	}
 }

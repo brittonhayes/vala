@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bufio"
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -27,56 +26,32 @@ func brainConfigured(cfg config.Config) bool {
 	return n.Hunts != "" || n.Intel != "" || n.Evidence != ""
 }
 
-const ephemeralNotice = `⚠ No brain is configured — running in ephemeral in-memory mode.
-  Hunts, intel, evidence, and detections will NOT persist; they vanish on exit.
-  Run ` + "`vala init --local`" + ` for a persistent on-disk brain (no account),
-  or ` + "`vala init`" + ` to provision a Notion-backed brain.`
-
-// firstRunNotice warns when the brain is unconfigured (ephemeral in-memory).
-// In an interactive session it offers to run `vala init` now; otherwise it
-// prints the warning to stderr and continues so automation is never blocked —
-// unless --require-brain is set, which turns the unconfigured state into an
-// error. The notice is suppressed by --no-init-prompt or a prior dismissal
-// recorded for this project so a deliberate in-memory user is not nagged.
-func firstRunNotice(ctx context.Context, cfg config.Config, cwd string, interactive bool) error {
-	if brainConfigured(cfg) || cfg.BrainFile != "" {
+// firstRunNotice is the non-interactive setup check used by `vala run`. It
+// enforces --require-brain and, when a surface is unconfigured, prints a concise
+// stderr summary and continues so automation is never blocked. The interactive
+// REPL uses the onboarding wizard (maybeRunSetup) instead.
+func firstRunNotice(cfg config.Config, cwd string) error {
+	if flagRequireBrain && !(brainConfigured(cfg) || cfg.BrainFile != "") {
+		return fmt.Errorf("no brain is configured; run `vala init` (or unset --require-brain)")
+	}
+	if setupComplete(cfg) || flagNoInitPrompt || initPromptDismissed(cwd) {
 		return nil
 	}
-	if flagRequireBrain {
-		return fmt.Errorf("no Notion brain is configured; run `vala init` (or unset --require-brain)")
+	var gaps []string
+	if !providerConfigured(cfg) {
+		gaps = append(gaps, "no model provider connected (run `vala connect`)")
 	}
-	if flagNoInitPrompt || initPromptDismissed(cwd) {
-		return nil
+	if !(brainConfigured(cfg) || cfg.BrainFile != "") {
+		gaps = append(gaps, "no brain — findings will not persist (run `vala init`)")
 	}
-
-	fmt.Fprintln(os.Stderr, ephemeralNotice)
-	if !interactive {
-		// Non-interactive (e.g. `vala run`): warn and continue, no prompt.
-		return nil
+	if !evidenceConfigured(cfg) {
+		gaps = append(gaps, "no evidence sources — nothing to hunt in (run `vala setup`)")
 	}
-
-	if promptYesNo("Set up a persistent on-disk brain now (no account needed)? [y/N] ") {
-		return provisionLocalBrain(cwd, "")
+	fmt.Fprintln(os.Stderr, "⚠ vala is not fully set up:")
+	for _, g := range gaps {
+		fmt.Fprintln(os.Stderr, "  - "+g)
 	}
-	// Declined: remember it so we don't prompt on every launch.
-	dismissInitPrompt(cwd)
 	return nil
-}
-
-// promptYesNo reads a single line from stdin and reports whether it is an
-// affirmative (y / yes, case-insensitive). Anything else — including EOF — is no.
-func promptYesNo(prompt string) bool {
-	fmt.Fprint(os.Stderr, prompt)
-	line, err := readLine()
-	if err != nil {
-		return false
-	}
-	switch strings.ToLower(line) {
-	case "y", "yes":
-		return true
-	default:
-		return false
-	}
 }
 
 // stdin is shared so sequential prompts don't drop input buffered by an earlier

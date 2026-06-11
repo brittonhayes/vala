@@ -81,18 +81,42 @@ type ProviderConfig struct {
 }
 
 // MCPServer describes one Model Context Protocol server vala connects to. The
-// API key is resolved from APIKeyEnv at load time so secrets stay in the
-// environment rather than the config file.
+// transport selects how it is reached: "http" (the default) dials URL with the
+// bearer token from APIKeyEnv; "stdio" launches Command/Args as a local
+// subprocess. Secrets are never stored here — only the names of the environment
+// variables that hold them, resolved at load time.
 type MCPServer struct {
 	// Name namespaces the server's tools inside vala (e.g. "scanner" yields
 	// tools like "scanner_execute_query").
 	Name string `json:"name"`
-	// URL is the server's streamable-HTTP endpoint.
-	URL string `json:"url"`
-	// APIKeyEnv names the environment variable holding the bearer token.
-	APIKeyEnv string `json:"api_key_env"`
+	// Transport is "http" (default when empty) or "stdio".
+	Transport string `json:"transport,omitempty"`
+
+	// URL is the server's streamable-HTTP endpoint (http transport).
+	URL string `json:"url,omitempty"`
+	// APIKeyEnv names the environment variable holding the bearer token (http
+	// transport).
+	APIKeyEnv string `json:"api_key_env,omitempty"`
+	// OAuth marks an HTTP server that authorizes via the MCP OAuth flow (browser
+	// sign-in + dynamic client registration) rather than a static bearer token.
+	// Wiz's remote MCP server works this way. Tokens are cached out of band, never
+	// in this file.
+	OAuth bool `json:"oauth,omitempty"`
+
+	// Command is the executable to launch (stdio transport).
+	Command string `json:"command,omitempty"`
+	// Args are the command's arguments (stdio transport).
+	Args []string `json:"args,omitempty"`
+	// EnvPassthrough names environment variables to forward to the subprocess
+	// (stdio transport). Values are read from the operator's environment at load
+	// time so secrets stay out of the config file.
+	EnvPassthrough []string `json:"env,omitempty"`
+
 	// APIKey is resolved from APIKeyEnv, never persisted.
 	APIKey string `json:"-"`
+	// Env holds the resolved name->value pairs for EnvPassthrough, never
+	// persisted.
+	Env map[string]string `json:"-"`
 }
 
 // Default returns the built-in configuration.
@@ -150,10 +174,20 @@ func Load(cwd string) (Config, error) {
 	if url := os.Getenv("SCANNER_MCP_URL"); url != "" && !hasMCPServer(cfg.MCP, "scanner") {
 		cfg.MCP = append(cfg.MCP, MCPServer{Name: "scanner", URL: url, APIKeyEnv: "SCANNER_API_KEY"})
 	}
-	// Resolve each server's bearer token from its named environment variable.
+	// Resolve each server's secrets from the environment so they stay out of the
+	// config file: the bearer token from APIKeyEnv (http) and any passthrough
+	// variables forwarded to a stdio subprocess.
 	for i := range cfg.MCP {
 		if env := cfg.MCP[i].APIKeyEnv; env != "" {
 			cfg.MCP[i].APIKey = os.Getenv(env)
+		}
+		for _, name := range cfg.MCP[i].EnvPassthrough {
+			if v, ok := os.LookupEnv(name); ok {
+				if cfg.MCP[i].Env == nil {
+					cfg.MCP[i].Env = make(map[string]string)
+				}
+				cfg.MCP[i].Env[name] = v
+			}
 		}
 	}
 	return cfg, nil

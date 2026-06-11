@@ -62,8 +62,13 @@ specs that consume them (model/compaction to
   MUST send the access token as a Bearer credential (never `x-api-key`), attach
   the `anthropic-beta: oauth-2025-04-20` header, and lead the system prompt with
   Claude Code's identity block.
-- **R-0009-05** Each MCP server's bearer token MUST be resolved at load time from
-  the server's `api_key_env` variable and MUST NOT be persisted.
+- **R-0009-05** No MCP server secret MUST be persisted to `.vala.json`. An HTTP
+  server's bearer token is resolved at load time from its `api_key_env` variable;
+  a stdio server's passthrough variables from the names in `env`; an `oauth: true`
+  HTTP server holds no secret in config at all (its token is cached out of band,
+  see [SPEC-0007](SPEC-0007-evidence-and-mcp.md) R-0007-04). An MCP server's
+  `transport` defaults to `http` when unset; a `stdio` server reads `command`,
+  `args`, and `env` instead of `url`/`api_key_env`.
 - **R-0009-10** A non-local provider with no key (neither environment nor store)
   MUST surface as a recoverable "not connected" condition so the interactive
   session can launch and offer `/connect`, while unattended runs fail closed.

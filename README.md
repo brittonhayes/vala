@@ -26,17 +26,22 @@ toolchain**: Sigma rules are validated and unit-tested offline, inside the binar
 
 ```sh
 go install github.com/brittonhayes/vala/cmd/vala@latest
-vala connect    # sign in with a subscription, paste a key, or point at a local model
+vala            # first run opens guided setup automatically
 ```
 
-`vala connect` is the one-time setup: choose Anthropic, OpenAI, Google,
-OpenRouter, Groq, DeepSeek, xAI, or a local runtime (Ollama, LM Studio), and
-vala stores the credential and remembers your choice. For Anthropic you can
-**log in with your Claude Pro/Max subscription** — vala opens your browser, you
-paste back the one-time code, and no raw API key is ever entered or stored.
-Prefer a key? Paste one instead, or skip connect entirely: a key already in your
-environment (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) is picked up
-automatically.
+The first time you run `vala` and it isn't fully wired up, it opens a guided
+setup that walks you through the three things it needs — a **model provider**, a
+**brain** (where findings persist), and the **evidence sources** it hunts in
+(Scanner, Wiz, or any MCP server). There's nothing separate to find; vala knows
+when you're not set up and helps you finish. Run `vala setup` anytime to add a
+source or change a choice.
+
+For Anthropic you can **log in with your Claude Pro/Max subscription** — vala
+opens your browser, you paste back the one-time code, and no raw API key is ever
+entered or stored. Prefer a key? Paste one instead, or skip setup entirely: a key
+already in your environment (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) is
+picked up automatically. To set up just the provider, `vala connect` jumps
+straight to the provider picker.
 
 <details>
 <summary>Build from source</summary>
@@ -250,7 +255,8 @@ provider's own key env such as `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`).
   "context_window": 200000,
   "auto_compact_threshold": 0.8,
   "mcp": [
-    { "name": "scanner", "url": "https://<your>.scanner.dev/mcp", "api_key_env": "SCANNER_API_KEY" }
+    { "name": "scanner", "url": "https://<your>.scanner.dev/mcp", "api_key_env": "SCANNER_API_KEY" },
+    { "name": "wiz", "url": "https://mcp.app.wiz.io/", "oauth": true }
   ],
   "brain_file": "",
   "notion": {
@@ -259,13 +265,34 @@ provider's own key env such as `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`).
 }
 ```
 
-**Evidence sources.** vala's evidence comes from MCP servers under `mcp`. Each is
-dialed at startup over streamable HTTP, its tools discovered, and the read-only
-ones handed to the agent; its bearer token is read from `api_key_env` and never
-persisted. The reference source is [Scanner](https://scanner.dev), whose inverted
-indexes make exploratory queries fast and cheap. As a shortcut, `SCANNER_MCP_URL`
-(plus `SCANNER_API_KEY`) registers Scanner with no config file. With no MCP
-server, vala reasons only over local files.
+**Evidence sources.** vala's evidence comes from MCP servers under `mcp` — this is
+what it actually hunts in. The fastest way to connect one is the guided setup,
+which runs automatically the first time vala detects it isn't fully wired up, and
+on demand any time:
+
+```sh
+vala setup     # connect a provider, a brain, and evidence sources
+```
+
+The wizard ships curated presets for [Scanner](https://scanner.dev) (a hosted
+data lake over HTTPS with an API key) and [Wiz](https://www.wiz.io) (the Security
+Graph, which you sign into in your browser), plus a custom-HTTP option for any MCP
+server. It validates each connection live — you see `✓ N tools` before you leave
+— and writes the entry to `.vala.json`. You can also hand-edit the `mcp` array:
+each server is connected at startup over its `transport` (`http`, the default, or
+`stdio`), its tools discovered, and the read-only ones handed to the agent.
+Secrets are never persisted to `.vala.json`:
+
+- a bearer-token server reads its key from `api_key_env`;
+- an `"oauth": true` server (e.g. Wiz) signs in through the browser on first use
+  and caches its token under `~/.config/vala/mcp-auth.json` (mode `0600`),
+  refreshing it silently on later launches;
+- a `stdio` server reads the variables named in `env` and passes them to the
+  subprocess.
+
+As a shortcut, `SCANNER_MCP_URL` (plus `SCANNER_API_KEY`) registers Scanner with
+no config file. The session banner shows which sources connected; with none, vala
+reasons only over local files.
 
 **Notion IDs.** The `notion` values are data-source IDs — `vala init` fills them
 in for you. To wire databases by hand, resolve an ID with

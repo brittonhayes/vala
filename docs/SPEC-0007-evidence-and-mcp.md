@@ -37,20 +37,30 @@ It does **not** define the tool interface (that is
 
 ### MCP connection & discovery
 
-- **R-0007-01** vala MUST dial each configured MCP server over streamable HTTP
-  at startup, discover its tools, and register each as a vala tool, indistinct
-  to the agent from a built-in tool.
+- **R-0007-01** vala MUST connect each configured MCP server at startup over its
+  declared transport — streamable HTTP (`transport: "http"`, the default) for a
+  remote server, or stdio (`transport: "stdio"`) for a local subprocess launched
+  from `command`/`args` — discover its tools, and register each as a vala tool,
+  indistinct to the agent from a built-in tool.
 - **R-0007-02** A discovered tool's name MUST be the server name and tool name
   namespaced and sanitized to `^[a-zA-Z0-9_-]+$` (e.g. `scanner_execute_query`).
 - **R-0007-03** A discovered tool's `ReadOnly()` MUST reflect the server's
   `readOnlyHint`. Read-only evidence tools bypass the permission gate; the rest
   are gated.
-- **R-0007-04** When a server declares an `api_key_env`, the bearer token MUST
-  be read from that environment variable and sent as
-  `Authorization: Bearer <token>`. It MUST NOT be persisted.
-- **R-0007-05** A server that fails to connect MUST be logged and skipped; vala
+- **R-0007-04** A server's credentials MUST come from one of three sources, none
+  of which persists a secret to the project config: (a) an HTTP server's
+  `api_key_env` bearer token, read from the environment and sent as
+  `Authorization: Bearer <token>`; (b) an `oauth: true` HTTP server, which MUST
+  authorize via the MCP OAuth flow (protected-resource/authorization-server
+  discovery, dynamic client registration, browser sign-in with PKCE) and cache
+  the resulting token out of band (`~/.config/vala/mcp-auth.json`, mode `0600`),
+  refreshing it silently on later launches; (c) a stdio server's `env` names,
+  resolved from the environment and set on the subprocess.
+- **R-0007-05** A server that fails to connect MUST be recorded and skipped; vala
   MUST continue with the remaining tools (with no MCP server, it reasons over
-  local files only).
+  local files only). The connection outcome of each source — connected with its
+  tool count, or the failure — MUST be surfaced to the operator in the session
+  rather than only logged, so a non-connecting source is never silent.
 - **R-0007-06** Tool outputs (query results, file contents) MUST be treated as
   untrusted data, never as instructions (see
   [SPEC-0011](SPEC-0011-permissions-and-safety.md)).

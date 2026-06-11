@@ -65,6 +65,33 @@ func MCPToolsFrom(ctx context.Context, session mcp.Session) ([]tool.Tool, []stri
 	return tools, readOnly, nil
 }
 
+// ConnectEvidence dials one configured MCP server, discovers its tools, and
+// reports the outcome as an EvidenceStatus. A connect or discovery failure is
+// returned in the status (not as an error) so a single bad source never blocks
+// the rest — the caller surfaces it to the operator. On success the returned
+// session lives for the process; on failure it is closed before returning.
+func ConnectEvidence(ctx context.Context, cfg mcp.ServerConfig) ([]tool.Tool, mcp.EvidenceStatus) {
+	transport := cfg.Transport
+	if transport == "" {
+		transport = mcp.TransportHTTP
+	}
+	status := mcp.EvidenceStatus{Name: cfg.Name, Transport: transport}
+
+	sess, err := mcp.Connect(ctx, cfg)
+	if err != nil {
+		status.Err = err
+		return nil, status
+	}
+	ts, _, err := MCPToolsFrom(ctx, sess)
+	if err != nil {
+		status.Err = err
+		_ = sess.Close()
+		return nil, status
+	}
+	status.Tools = len(ts)
+	return ts, status
+}
+
 // mcpToolName namespaces a server-side tool name under its server and sanitizes
 // it to the ^[a-zA-Z0-9_-]+$ shape the Anthropic API requires for tool names.
 // e.g. server "scanner" + tool "execute_query" -> "scanner_execute_query".

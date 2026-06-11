@@ -10,6 +10,7 @@ import (
 
 	"github.com/brittonhayes/vala/internal/agent"
 	"github.com/brittonhayes/vala/internal/llm"
+	"github.com/brittonhayes/vala/internal/mcp"
 	"github.com/brittonhayes/vala/internal/permission"
 	"github.com/brittonhayes/vala/internal/session"
 	tea "github.com/charmbracelet/bubbletea"
@@ -35,6 +36,11 @@ type REPL struct {
 	// latest stored credentials. /connect calls it to wire up or switch providers
 	// mid-session. Nil disables /connect's live switching.
 	Connect func(provider, model string) (llm.Provider, error)
+
+	// Evidence reports how each configured MCP source connected, rendered in the
+	// session banner so the operator sees what is available to hunt in (and any
+	// source that failed) rather than having the failure swallowed by stderr.
+	Evidence []mcp.EvidenceStatus
 
 	styles  Styles
 	program *tea.Program

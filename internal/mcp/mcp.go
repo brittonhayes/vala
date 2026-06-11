@@ -1,6 +1,7 @@
 // Package mcp is a thin client over the Model Context Protocol Go SDK. It lets
-// vala connect to remote MCP servers (e.g. Scanner's security data lake) over
-// the streamable-HTTP transport, discover the tools they expose, and call them.
+// vala connect to MCP servers — both remote servers over streamable HTTP (e.g.
+// Scanner's security data lake) and local subprocesses over stdio (e.g. the Wiz
+// Security Graph server) — discover the tools they expose, and call them.
 //
 // The rest of vala depends only on the small Session interface defined here, so
 // the concrete SDK client stays isolated and tests can inject a fake session
@@ -12,10 +13,40 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"os/exec"
 	"strings"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// Transport names the wire vala uses to reach an MCP server.
+const (
+	// TransportHTTP dials a remote server over streamable HTTP. It is the
+	// default when a server leaves its transport unset.
+	TransportHTTP = "http"
+	// TransportStdio launches a local subprocess and speaks newline-delimited
+	// JSON over its stdin/stdout. Security servers that ship as a CLI (e.g. Wiz)
+	// use this.
+	TransportStdio = "stdio"
+)
+
+// EvidenceStatus reports the outcome of connecting one configured MCP evidence
+// source, so the session can show the operator what is (and is not) connected
+// instead of swallowing failures on stderr behind the alt-screen.
+type EvidenceStatus struct {
+	// Name is the configured server name (e.g. "scanner").
+	Name string
+	// Transport is the wire used ("http" or "stdio").
+	Transport string
+	// Tools is the number of tools discovered when the connection succeeded.
+	Tools int
+	// Err is non-nil when the server failed to connect or serve its tools.
+	Err error
+}
+
+// OK reports whether the source connected and served at least its tool list.
+func (s EvidenceStatus) OK() bool { return s.Err == nil }
 
 // ToolDesc describes one tool exposed by a remote MCP server.
 type ToolDesc struct {
@@ -52,32 +83,79 @@ type Session interface {
 	Close() error
 }
 
-// ServerConfig describes how to reach one MCP server.
+// ServerConfig describes how to reach one MCP server. Transport selects the
+// wire: TransportHTTP (the default) uses URL/APIKey; TransportStdio uses
+// Command/Args/Env to launch a local subprocess.
 type ServerConfig struct {
 	// Name namespaces the server's tools inside vala (e.g. "scanner").
 	Name string
-	// URL is the streamable-HTTP endpoint.
+	// Transport is "http" (default) or "stdio".
+	Transport string
+
+	// URL is the streamable-HTTP endpoint (TransportHTTP).
 	URL string
-	// APIKey, if set, is sent as an "Authorization: Bearer <key>" header.
+	// APIKey, if set, is sent as an "Authorization: Bearer <key>" header
+	// (TransportHTTP).
 	APIKey string
+	// OAuth, when true, authorizes the server with the MCP OAuth flow (browser
+	// sign-in + dynamic client registration), caching tokens out of band. Used by
+	// servers like Wiz that have no static API key (TransportHTTP).
+	OAuth bool
+
+	// Command is the executable to launch for a local server (TransportStdio).
+	Command string
+	// Args are the command's arguments (TransportStdio).
+	Args []string
+	// Env holds already-resolved environment variables (name->value) to set on
+	// the subprocess, layered over the operator's environment (TransportStdio).
+	Env map[string]string
 }
 
-// Connect dials an MCP server over streamable HTTP and returns a live session.
+// Connect dials an MCP server over the configured transport and returns a live
+// session. Streamable HTTP is the default; "stdio" launches a local subprocess.
 func Connect(ctx context.Context, cfg ServerConfig) (Session, error) {
-	if cfg.URL == "" {
-		return nil, fmt.Errorf("mcp server %q: no URL configured", cfg.Name)
+	transport, err := clientTransport(cfg)
+	if err != nil {
+		return nil, err
 	}
-	httpClient := http.DefaultClient
-	if cfg.APIKey != "" {
-		httpClient = &http.Client{Transport: &bearerTransport{key: cfg.APIKey, base: http.DefaultTransport}}
-	}
-	transport := &sdk.StreamableClientTransport{Endpoint: cfg.URL, HTTPClient: httpClient}
 	client := sdk.NewClient(&sdk.Implementation{Name: "vala", Version: "0.1.0"}, nil)
 	cs, err := client.Connect(ctx, transport, nil)
 	if err != nil {
 		return nil, fmt.Errorf("connect to mcp server %q: %w", cfg.Name, err)
 	}
 	return &session{cs: cs, name: cfg.Name}, nil
+}
+
+// clientTransport builds the SDK transport for a server config.
+func clientTransport(cfg ServerConfig) (sdk.Transport, error) {
+	switch cfg.Transport {
+	case TransportStdio:
+		if cfg.Command == "" {
+			return nil, fmt.Errorf("mcp server %q: no command configured for stdio transport", cfg.Name)
+		}
+		cmd := exec.Command(cfg.Command, cfg.Args...)
+		cmd.Env = os.Environ()
+		for k, v := range cfg.Env {
+			cmd.Env = append(cmd.Env, k+"="+v)
+		}
+		return &sdk.CommandTransport{Command: cmd}, nil
+	case TransportHTTP, "":
+		if cfg.URL == "" {
+			return nil, fmt.Errorf("mcp server %q: no URL configured", cfg.Name)
+		}
+		t := &sdk.StreamableClientTransport{Endpoint: cfg.URL, HTTPClient: http.DefaultClient}
+		switch {
+		case cfg.OAuth:
+			// Browser sign-in with token caching; the handler sets the auth header
+			// and recovers from the initial 401.
+			t.OAuthHandler = newOAuthHandler(cfg.Name, defaultTokenStore())
+		case cfg.APIKey != "":
+			t.HTTPClient = &http.Client{Transport: &bearerTransport{key: cfg.APIKey, base: http.DefaultTransport}}
+		}
+		return t, nil
+	default:
+		return nil, fmt.Errorf("mcp server %q: unknown transport %q", cfg.Name, cfg.Transport)
+	}
 }
 
 // bearerTransport injects a Bearer token on every request. Scanner (and most
