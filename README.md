@@ -176,31 +176,43 @@ guidance.
 
 ## The hunt loop
 
-vala runs a single loop, shaped after the frameworks every hunt team knows —
-Sqrrl's Hunting Loop, Splunk PEAK, TaHiTI. The loop and its rationale are
+vala runs a single eight-stage loop, shaped after the frameworks every hunt team
+knows — Sqrrl's Hunting Loop, Splunk PEAK, TaHiTI. The loop and its rationale are
 specified in [`docs/SPEC-0001`](docs/SPEC-0001-overview-and-hunt-loop.md); the
 full specification set — the grounding truth for what vala offers — lives in
 [`docs/`](docs/README.md).
 
-**1 · Scope.** State the hypothesis with ABLE — the testable adversary
-**B**ehavior and the data-source **L**ocation where it'd show up. `recall` reads
-the brain back first, so settled ground isn't re-hunted and related intel gets
-pulled forward. `queue_hunt` drops triggers (intel, a hunch, a fresh CVE, a past
-incident) onto a prioritized backlog.
+**1 · Scope & prioritize.** Choose what to hunt — weighting detection coverage
+gaps first, then active threat intel, then what matters in this environment.
+`recall` (including the `coverage` scope) reads the brain back so settled ground
+isn't re-hunted; `queue_hunt` parks triggers on a prioritized backlog.
 
-**2 · Hunt.** `open_hunt` kicks off a hypothesis-driven hunt over read-only data
-sources, spoken via the [Model Context Protocol](https://modelcontextprotocol.io).
-Point it at a [Scanner](https://scanner.dev) data lake and it discovers the
-indexes and fields, queries them, and records each fact as an immutable Finding
-and each indicator, TTP, or actor as a first-class artifact.
+**2 · Form hypothesis.** State it with ABLE — the testable adversary
+**B**ehavior and the data-source **L**ocation where it'd show up — and pick a
+hunt type: hypothesis-driven, baseline, or model-assisted. `open_hunt` opens it.
 
-**3 · Conclude.** `store_hunt` writes the narrative page with a verdict —
-**Confirmed**, **Refuted**, or **Inconclusive**. Every declarative finding must
-cite a Finding ID, or the page bounces.
+**3 · Plan & validate data.** `validate_data` confirms the telemetry exists
+before you query. A failed check is recorded as a visibility gap — never a
+silent skip — and is an actionable outcome in its own right.
 
-**4 · Automate.** A confirmed hunt earns a detection. vala studies, authors,
-validates, and tests a Sigma rule for the proven behavior — then links it back
-to the hunt. A refuted hunt earns none.
+**4–5 · Execute & deep-dive.** Investigate over read-only data sources, spoken
+via the [Model Context Protocol](https://modelcontextprotocol.io). Point it at a
+[Scanner](https://scanner.dev) data lake and it discovers the indexes, queries
+them, baselines normal, and records each fact as an immutable Finding (and each
+indicator, TTP, or actor as a first-class artifact).
+
+**6 · Document & decide.** `store_hunt` writes the narrative page with a verdict
+— **Confirmed**, **Refuted**, or **Inconclusive** — and a detection-output tier
+decision. Every declarative finding must cite a Finding ID, or the page bounces.
+
+**7 · Convert to detection.** vala picks the highest-fidelity output the finding
+supports: a Sigma rule (tiers 1–2), a recurring hunt (tier 3), a playbook (tier
+4), or a justified no-build (tier 5). A low-value rule is worse than none.
+
+**8 · Feed back.** `update_coverage` records the technique's coverage state so
+the next hunt aims where coverage is weakest, and follow-on hypotheses are
+queued. The autonomy at each stage scales with the Hunting Maturity Model level
+([`docs/SPEC-0013`](docs/SPEC-0013-maturity-and-autonomy.md)).
 
 ## Detections
 
