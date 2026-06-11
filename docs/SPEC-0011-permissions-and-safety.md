@@ -55,7 +55,12 @@ or how the agent loop invokes the gate (that is
   `permission`, the `VALA_PERMISSION` env var, and the `--permission` flag, in
   that increasing precedence ([SPEC-0009](SPEC-0009-configuration.md),
   [SPEC-0010](SPEC-0010-cli.md)). `vala run --yes` MUST set `allow`; `vala run`
-  defaults to denying writes.
+  defaults to denying writes. When no explicit `permission` is set anywhere, the
+  default MUST instead be **derived from the maturity level**
+  (`0→deny`, `1–2→ask`, `3–4→allow`; see
+  [SPEC-0013](SPEC-0013-maturity-and-autonomy.md)). Maturity changes only this
+  *default* — the gate's `allow`/`ask`/`deny` semantics and enforcement (R-0011-01
+  through R-0011-06) are unchanged at every level.
 - **R-0011-08** An invalid mode string MUST parse to `ask` rather than error.
 
 ### Content safety (agent discipline)
@@ -145,3 +150,4 @@ The system prompt carries, verbatim in spirit:
 - [SPEC-0003](SPEC-0003-tool-harness.md) — `ReadOnly()`, the gate's input.
 - [SPEC-0008](SPEC-0008-agent-and-session.md) — where the loop calls the gate.
 - [SPEC-0009](SPEC-0009-configuration.md) / [SPEC-0010](SPEC-0010-cli.md) — mode sources.
+- [SPEC-0013](SPEC-0013-maturity-and-autonomy.md) — the maturity-derived default mode.

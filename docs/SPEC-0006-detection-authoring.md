@@ -1,23 +1,30 @@
 # SPEC-0006 · Detection Authoring
 
-> The Automate step's toolkit: consult exemplars, edit single Sigma fields
-> without disturbing comments, attach a runbook and tests, then validate and run.
+> The convert stage's toolkit for detection tiers 1–2: consult exemplars, edit
+> single Sigma fields without disturbing comments, attach a runbook and tests,
+> then validate and run.
 
 | Field | Value |
 |---|---|
 | **ID** | SPEC-0006 |
 | **Status** | Stable |
-| **Updated** | 2026-06-09 |
+| **Updated** | 2026-06-10 |
 | **Source of truth** | `internal/tools/{reference,detection,detection_edit,*detection*}.go`, `internal/sigma/edit.go`, `internal/reference/` |
 | **Depends on** | SPEC-0001, SPEC-0003, SPEC-0005 |
 
 ## 1. Purpose & scope
 
-This spec defines how vala authors a detection in the Automate step: the
-reference exemplars the agent learns shape from, the surgical field-editing tools
-that change one Sigma field at a time while preserving comments and key order,
-the custom `runbook:` and `tests:` fields, and the validate/test tools that gate
-"done."
+This spec defines how vala authors a Sigma rule in the **convert** stage of the
+loop. A Sigma rule is the output for detection-output **tiers 1–2** of the
+hierarchy (defined in [SPEC-0001](SPEC-0001-overview-and-hunt-loop.md) §4) — the
+highest-fidelity outputs a hunt can support — not the inevitable deliverable of
+every confirmed hunt; tiers 3–5 produce a recurring hunt, a playbook, or a
+justified no-build instead. The tier decision itself is made and recorded by
+`store_hunt` ([SPEC-0004](SPEC-0004-hunting-workflow.md) R-0004-10/12). This spec
+covers the reference exemplars the agent learns shape from, the surgical
+field-editing tools that change one Sigma field at a time while preserving
+comments and key order, the custom `runbook:` and `tests:` fields, and the
+validate/test tools that gate "done."
 
 It does **not** define the matching/validation engine itself (that is
 [SPEC-0005](SPEC-0005-detection-engine.md)) nor the brain `detections` row (that
@@ -140,7 +147,7 @@ key, root account usage). `reference.List()` returns metadata; `reference.Get(na
 returns full bytes. All exemplars validate and pass their inline tests (enforced
 by tests; see [SPEC-0005](SPEC-0005-detection-engine.md) A-0005-06).
 
-### A typical Automate sequence
+### A typical convert sequence (tiers 1–2)
 
 ```
 reference_detection(name) → write/edit_detection_logic → set_detection_meta

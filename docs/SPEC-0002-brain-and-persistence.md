@@ -1,20 +1,21 @@
 # SPEC-0002 · Brain & Persistence
 
-> vala's memory is a six-table graph — backlog, hunts, evidence, intel,
-> detections, memory — backed by an in-memory store, a JSON file, or a Notion
-> workspace. A Notion workspace makes memory multiplayer: one team, one brain.
+> vala's memory is a seven-table graph — backlog, hunts, evidence, intel,
+> detections, memory, coverage — backed by an in-memory store, a JSON file, or a
+> Notion workspace. A Notion workspace makes memory multiplayer: one team, one
+> brain.
 
 | Field | Value |
 |---|---|
 | **ID** | SPEC-0002 |
 | **Status** | Stable |
-| **Updated** | 2026-06-09 |
+| **Updated** | 2026-06-10 |
 | **Source of truth** | `internal/brain/` |
 | **Depends on** | SPEC-0001 |
 
 ## 1. Purpose & scope
 
-This spec defines vala's persistence layer — "the brain": the six logical
+This spec defines vala's persistence layer — "the brain": the seven logical
 tables, the fields and relations on each, the interchangeable storage backends,
 and how a Notion brain is provisioned. It covers the data model and the storage
 contract.
@@ -25,8 +26,9 @@ vala at a Notion workspace (that is [SPEC-0009](SPEC-0009-configuration.md)).
 
 ## 2. Definitions
 
-- **Store / table** — one of the six logical databases, named by a `DB*`
-  constant: `evidence`, `hunts`, `intel`, `detections`, `backlog`.
+- **Store / table** — one of the seven logical databases, named by a `DB*`
+  constant: `evidence`, `hunts`, `intel`, `detections`, `backlog`, `memory`,
+  `coverage`.
 - **Row** — one artifact in a store: `{ID, DB, Props}` where `Props` is a flat
   `map[string]any` of property name → value.
 - **Relation** — a property whose value is a list of row IDs, forming a graph
@@ -41,9 +43,9 @@ vala at a Notion workspace (that is [SPEC-0009](SPEC-0009-configuration.md)).
 
 ### Data model
 
-- **R-0002-01** The brain MUST consist of exactly six logical stores: evidence,
-  hunts, intel, detections, backlog, memory. The set of stores is the entire
-  persistence surface.
+- **R-0002-01** The brain MUST consist of exactly seven logical stores: evidence,
+  hunts, intel, detections, backlog, memory, coverage. The set of stores is the
+  entire persistence surface.
 - **R-0002-02** `brain.Schema()` MUST be the single source of truth for the
   shape of every store: each store's title column, scalar properties, relation
   properties, and any status options. A property a writer emits MUST appear in
@@ -63,6 +65,10 @@ vala at a Notion workspace (that is [SPEC-0009](SPEC-0009-configuration.md)).
 - **R-0002-07** A **backlog item** MUST progress linearly `Queued → Opened →
   Done`. Moving to `Opened` or `Done` SHOULD set the item's `hunt` relation to
   the hunt it became.
+- **R-0002-15** A **coverage** row MUST occupy exactly one `status` —
+  `Covered`, `Thin`, or `Uncovered` — and there MUST be at most one row per
+  ATT&CK technique: `UpsertCoverage` keys on `technique`, updating the existing
+  row rather than duplicating it (see [SPEC-0012](SPEC-0012-coverage-and-feedback.md)).
 
 ### Backends
 
@@ -82,7 +88,7 @@ vala at a Notion workspace (that is [SPEC-0009](SPEC-0009-configuration.md)).
 
 ### Provisioning
 
-- **R-0002-12** `vala init` MUST provision all six databases under a parent
+- **R-0002-12** `vala init` MUST provision all seven databases under a parent
   page, in two passes: scalar properties first, then relation properties once
   every target data source exists.
 - **R-0002-13** Provisioning MUST verify the operator is authenticated to Notion
@@ -114,7 +120,7 @@ type Row struct {
 name-mapper that turns each logical `DB*` name into the configured data-source
 ID; otherwise logical names pass through unchanged (R-0002-10).
 
-### The six stores
+### The seven stores
 
 Property types are Notion types: `title`, `rich_text`, `select`, `status`,
 `date`. Relations name their target store.
@@ -124,11 +130,16 @@ Property types are Notion types: `title`, `rich_text`, `select`, `status`,
 | Property | Type | Notes |
 |---|---|---|
 | `claim` | title | the claim the pointer backs |
-| `kind` | select | `query` \| `url` \| `file_hash` \| `log_ref` |
-| `pointer` | rich_text | the immutable pointer (query ID, URL, hash, log ref) |
+| `kind` | select | `query` \| `url` \| `file_hash` \| `log_ref` \| `data_plan` \| `visibility_gap` |
+| `pointer` | rich_text | the immutable pointer (query ID, URL, hash, log ref, data-plan summary, or affected sources) |
 | `confidence` | select | `confirmed` \| `probable` \| `hypothesis` |
 | `collected_at` | date | RFC 3339 |
 | `hunt` → hunts | relation | the hunt this finding backs |
+
+`kind` is a Notion `select`, so its options auto-create on write; `data_plan`
+(a validated telemetry plan) and `visibility_gap` (a failed telemetry check)
+are the validate-data stage's two evidence kinds (see
+[SPEC-0004](SPEC-0004-hunting-workflow.md), [SPEC-0001](SPEC-0001-overview-and-hunt-loop.md) §4).
 
 **hunts** — hypothesis-driven hunts (title: `hunt_id`)
 
@@ -141,6 +152,9 @@ Property types are Notion types: `title`, `rich_text`, `select`, `status`,
 | `mitre` | rich_text | ATT&CK technique(s) |
 | `behavior` | rich_text | ABLE behavior (optional) |
 | `data_source` | rich_text | ABLE location (optional) |
+| `hunt_type` | select | `hypothesis` \| `baseline` \| `model_assisted`; set on open |
+| `detection_tier` | select | the detection-output tier; set on close |
+| `tier_rationale` | rich_text | why that tier; set on close |
 | `findings` | rich_text | summary, written on close |
 | `started_at` | date | set on open |
 | `ended_at` | date | set on close |
@@ -201,6 +215,22 @@ shares each other's memories; each row records who learned it.
 | `created_at` | date | RFC 3339 |
 | `hunt` → hunts | relation | the hunt that taught it (optional) |
 
+**coverage** — the cross-hunt detection-coverage map, one row per ATT&CK
+technique (title: `technique`). The feedback stage upserts it (keyed by
+technique) as hunts conclude; scoping reads it to aim the next hypothesis at the
+weakest spots. See [SPEC-0012](SPEC-0012-coverage-and-feedback.md).
+
+| Property | Type | Notes |
+|---|---|---|
+| `technique` | title | ATT&CK technique ID, e.g. `attack.t1562.001` |
+| `tactic` | rich_text | the ATT&CK tactic (optional) |
+| `status` | status | `Covered` \| `Thin` \| `Uncovered` |
+| `fidelity` | select | `high` \| `medium` \| `low` \| `none` |
+| `detections` | rich_text | summary of the detections that cover it |
+| `updated_at` | date | RFC 3339 |
+| `hunts` → hunts | relation | hunts that touched this technique |
+| `detections` → detections | relation | detections covering it |
+
 ### The graph
 
 ```
@@ -210,6 +240,7 @@ Backlog ─►(opened as) Hunts ─►(produced) Detections
   Intel ───(surfaced / informs)───────────────┘
             Evidence ──(backs)── Hunts
              Memory ──(learned during)── Hunts
+           Coverage ──(touched by / covered by)── Hunts, Detections
 ```
 
 ### Writer functions (the brain `Client`)
@@ -220,7 +251,7 @@ These are the only writers; each emits the exact property names above.
 |---|---|
 | `OpenHunt(h Hunt) → id` | creates a hunts row, `status=Open`, `started_at=now` |
 | `RecordFinding(huntID, e Evidence) → id` | creates an evidence row linked to the hunt |
-| `CloseHunt(huntID, status, findings)` | sets `status`, `findings`, `ended_at=now` |
+| `CloseHunt(huntID, status, findings, detectionTier, tierRationale)` | sets `status`, `findings`, `ended_at=now`, and the detection-tier decision |
 | `WriteHuntPage(title, p HuntPage) → url` | renders the narrative markdown page |
 | `RecordIntel(i Intel) → id` | creates an intel row; inline `hunts`/`detections` relations |
 | `RecordDetection(d DetectionRef) → id` | creates a detections row; inline `intel`/`hunts` relations |
@@ -229,7 +260,8 @@ These are the only writers; each emits the exact property names above.
 | `Link(rowID, relation, targetIDs…)` | the single relation primitive; no-op on empty targets |
 | `Remember(m Memory) → id` | creates a memory row stamped with `author` (and an optional `hunt` relation) |
 | `Memories(query, limit) → []Memory` | typed read-back of shared memory, text-extracted across backends |
-| `Recall(db, query, limit) → []Row` | free-text read-back (see below) |
+| `UpsertCoverage(cov Coverage) → id` | upserts a coverage row keyed by `technique`: updates the matching row (via `findCoverage`, exact-technique match) or creates one; stamps `updated_at` |
+| `Recall(db, query, limit) → []Row` | free-text read-back, including the `coverage` store (see below) |
 
 ### Recall semantics
 
@@ -268,13 +300,14 @@ in-memory; `NTN` queries the data source and filters client-side.
 
 ## 5. Acceptance criteria
 
-- **A-0002-01** (R-0002-01) `brain.Schema()` returns exactly six `DBSpec`s
-  named evidence, hunts, intel, detections, backlog, memory.
+- **A-0002-01** (R-0002-01) `brain.Schema()` returns exactly seven `DBSpec`s
+  named evidence, hunts, intel, detections, backlog, memory, coverage.
 - **A-0002-02** (R-0002-02, R-0002-03) Every property emitted by a writer in
-  `hunt.go`/`intel.go`/`backlog.go` appears in the matching `DBSpec.Props` or
-  `Relations`; each `DBSpec` has exactly one `title` prop.
+  `hunt.go`/`intel.go`/`backlog.go`/`coverage.go` appears in the matching
+  `DBSpec.Props` or `Relations`; each `DBSpec` has exactly one `title` prop.
 - **A-0002-03** (R-0002-06) `CloseHunt` only ever writes a status of `Confirmed`,
-  `Refuted`, or `Inconclusive`; `OpenHunt` writes `Open`.
+  `Refuted`, or `Inconclusive`, plus the chosen detection tier and rationale;
+  `OpenHunt` writes `Open` and the hunt type.
 - **A-0002-04** (R-0002-07) `SetBacklogStatus(id, "Opened", huntID)` sets
   `status=Opened` and `hunt=[huntID]`.
 - **A-0002-05** (R-0002-09) With an empty `notion` config, `brainStore()` yields
@@ -284,6 +317,9 @@ in-memory; `NTN` queries the data source and filters client-side.
   the target list is empty.
 - **A-0002-07** (R-0002-14) Running `vala init` twice against the same parent
   with valid IDs does not create duplicate databases.
+- **A-0002-08** (R-0002-15) `UpsertCoverage` for a technique creates a row the
+  first time and updates that same row on a second call with the same technique
+  (`internal/brain/coverage_test.go` `TestUpsertCoverageCreatesThenUpdates`).
 
 ## 6. Non-goals
 

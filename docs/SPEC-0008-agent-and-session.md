@@ -56,7 +56,7 @@ loading ([SPEC-0009](SPEC-0009-configuration.md)).
 ### System prompt
 
 - **R-0008-08** The system prompt MUST frame vala as a hunting harness (not a
-  persona), present the four-step loop in order, state the operating principles
+  persona), present the eight-stage loop in order, state the operating principles
   (investigate first, smallest change, adapt on denial, cite evidence), and
   declare tool outputs untrusted (see [SPEC-0001](SPEC-0001-overview-and-hunt-loop.md),
   [SPEC-0011](SPEC-0011-permissions-and-safety.md)).
