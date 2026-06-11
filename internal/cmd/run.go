@@ -48,7 +48,7 @@ to prompt). Pass --yes to auto-approve every tool call for an unattended run.`,
 		}
 
 		sess, _ := session.New(session.DefaultDir())
-		ag := agent.New(built.client, built.registry, built.gate, built.cwd, built.cfg.MaxSteps,
+		ag := agent.New(built.client, built.registry, built.gate, built.cwd, built.cfg.MaxSteps, built.cfg.Maturity,
 			sessionContext(cmd.Context(), built.cwd, built.rc.Brain))
 
 		prompt := strings.Join(args, " ")

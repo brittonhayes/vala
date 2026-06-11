@@ -74,7 +74,7 @@ single non-interactive task.`,
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "warning: transcript disabled:", err)
 		}
-		ag := agent.New(built.client, built.registry, built.gate, built.cwd, built.cfg.MaxSteps,
+		ag := agent.New(built.client, built.registry, built.gate, built.cwd, built.cfg.MaxSteps, built.cfg.Maturity,
 			sessionContext(cmd.Context(), built.cwd, built.rc.Brain))
 		repl := ui.New(ag, built.gate, sess, modelLabel(built.client), contextWindow(built.client, built.cfg), built.cfg.AutoCompactThreshold)
 		repl.Evidence = built.evidence

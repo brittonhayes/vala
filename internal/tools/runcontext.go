@@ -23,12 +23,12 @@ type RunContext struct {
 
 	mu          sync.Mutex
 	evidence    []brain.Evidence
-	huntType    string // set by open_hunt (PEAK hunt style)
+	huntType    string           // set by open_hunt (PEAK hunt style)
 	gaps        []brain.Evidence // visibility gaps recorded by validate_data
-	dataPlanOK  bool   // set by validate_data when telemetry is validated
-	coverageOK  bool   // set by update_coverage in the feedback stage
-	huntOutcome string // set by store_hunt
-	huntPageURL string // set by store_hunt
+	dataPlanOK  bool             // set by validate_data when telemetry is validated
+	coverageOK  bool             // set by update_coverage in the feedback stage
+	huntOutcome string           // set by store_hunt
+	huntPageURL string           // set by store_hunt
 }
 
 // NewRunContext builds a RunContext over the given brain client. A hunt is set

@@ -36,10 +36,10 @@ const (
 // finding supports. Tiers 1–2 produce a Sigma rule; tier 3 a recurring hunt;
 // tier 4 a playbook; tier 5 a justified decision to build nothing.
 const (
-	TierAutomated   = "tier1_automated"      // production-grade, high-fidelity Sigma rule
-	TierTriage      = "tier2_triage"         // lower-fidelity Sigma that surfaces candidates for review
-	TierRecurring   = "tier3_recurring_hunt" // re-run the hunt on a cadence; no rule yet feasible
-	TierPlaybook    = "tier4_playbook"       // documented investigation method for future hunts
+	TierAutomated   = "tier1_automated"       // production-grade, high-fidelity Sigma rule
+	TierTriage      = "tier2_triage"          // lower-fidelity Sigma that surfaces candidates for review
+	TierRecurring   = "tier3_recurring_hunt"  // re-run the hunt on a cadence; no rule yet feasible
+	TierPlaybook    = "tier4_playbook"        // documented investigation method for future hunts
 	TierNoDetection = "tier5_none_documented" // justified no-build (benign, out of scope, or a visibility gap)
 )
 
@@ -60,9 +60,9 @@ const (
 // ATT&CK technique covered by a reliable detection, thinly covered, or not at
 // all? The Feedback stage upserts coverage as hunts conclude.
 const (
-	CoverageCovered    = "Covered"
-	CoverageThin       = "Thin"
-	CoverageUncovered  = "Uncovered"
+	CoverageCovered   = "Covered"
+	CoverageThin      = "Thin"
+	CoverageUncovered = "Uncovered"
 )
 
 // Backlog status values. A trigger is queued as a hypothesis, gets opened into
