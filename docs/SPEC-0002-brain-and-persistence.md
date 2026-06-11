@@ -88,14 +88,22 @@ vala at a Notion workspace (that is [SPEC-0009](SPEC-0009-configuration.md)).
 
 ### Provisioning
 
-- **R-0002-12** `vala init` MUST provision all seven databases under a parent
-  page, in two passes: scalar properties first, then relation properties once
-  every target data source exists.
+- **R-0002-12** Provisioning MUST create a single Notion database titled "Vala
+  Brain" under the home page, holding one **data source** per store (the same
+  seven stores). The first store becomes the database's initial data source; the
+  rest are added as data sources under that database. It MUST run in two passes:
+  scalar properties first, then relation properties once every target data
+  source exists.
 - **R-0002-13** Provisioning MUST verify the operator is authenticated to Notion
   (`ntn whoami`) before creating anything.
-- **R-0002-14** Provisioning MUST be idempotent: re-running against an existing,
-  valid configuration verifies and reuses it rather than duplicating databases
-  (override with `--force`; see [SPEC-0010](SPEC-0010-cli.md)).
+- **R-0002-14** A configured brain MUST be verifiable and repairable in place:
+  `NTN.Verify` MUST report which stores are missing and whether the parent
+  database resolves. When data sources are missing, `NTN.AddMissing` MUST
+  re-create only those store(s) under the existing "Vala Brain" database; when
+  the parent database itself is gone, provisioning MUST re-create a fresh single
+  database. Verification and repair MUST NOT duplicate stores that already
+  resolve (the repair flow runs from `vala setup`; see
+  [SPEC-0010](SPEC-0010-cli.md)).
 
 ## 4. Behavior & interfaces
 
@@ -279,24 +287,35 @@ in-memory; `NTN` queries the data source and filters client-side.
   `Mem`, persisted to a single JSON file written atomically (temp + rename) on
   every mutation and reloaded on open, so the ID sequence and rows survive across
   sessions. Narrative pages are written as readable `.md` files in a `pages`
-  directory beside the JSON. Selected by the `brain_file` config key
-  (`vala init --local`); a durable brain with no external account.
+  directory beside the JSON. Selected by the `brain_file` config key (chosen as
+  the on-disk option in the `vala setup` wizard); a durable brain with no
+  external account.
 - **NTN** — shells the operator's authenticated `ntn` CLI / Notion API. Holds a
-  `DBIDs` struct (one data-source ID per store + a narrative parent page ID),
-  lazily caches each data source's property schema, and coerces flat props into
-  Notion typed property objects. Requires `ntn login`.
+  `DBIDs` struct (the parent `database` ID + one data-source ID per store + a
+  narrative parent page ID), lazily caches each data source's property schema,
+  and coerces flat props into Notion typed property objects. Requires
+  `ntn login`.
 
-### Provisioning (`vala init`)
+### Provisioning (from `vala setup`)
 
 1. `Whoami` — verify authentication (R-0002-13).
-2. For each `DBSpec` in `Schema()`: `CreateDatabase(parent, title, props,
-   statusOptions)` → returns `(dbID, dsID)`; status columns are seeded with their
-   allowed values (R-0002-11).
-3. Create the narrative parent page (hunt pages are written beneath it).
+2. Create the home page; the narrative hunt pages are written directly beneath
+   it (`page_parent` is that home page — there is no separate "Vala Hunt Pages"
+   wrapper page).
+3. Create **one** database titled "Vala Brain" under the home page from the
+   first `DBSpec` in `Schema()` → returns `(databaseID, dsID)`. For every
+   remaining `DBSpec`: `POST /v1/data_sources` with a `database_id` parent adds
+   that store as another data source on the same database. Status columns are
+   seeded with their allowed values (R-0002-11).
 4. Second pass: `AddRelations(dsID, …)` wires each relation to its target's
    data-source ID (R-0002-12).
-5. `DBIDsFromMap(...)` assembles the `DBIDs`, persisted to `./.vala.json` under
+5. `DBIDsFromMap(...)` assembles the `DBIDs` (the `database` ID, each store's
+   data-source ID, and `page_parent`), persisted to `./.vala.json` under
    `notion` (see [SPEC-0009](SPEC-0009-configuration.md)).
+
+Repair: if a configured brain is missing a data source, `NTN.AddMissing` adds
+the missing store(s) to the existing "Vala Brain" database; if the database
+itself is gone, a fresh single database is provisioned (R-0002-14).
 
 ## 5. Acceptance criteria
 
@@ -315,8 +334,10 @@ in-memory; `NTN` queries the data source and filters client-side.
   against `Mem`).
 - **A-0002-06** (R-0002-05) `setRelation` / `Link` write no relation key when
   the target list is empty.
-- **A-0002-07** (R-0002-14) Running `vala init` twice against the same parent
-  with valid IDs does not create duplicate databases.
+- **A-0002-07** (R-0002-14) `NTN.Verify` against a valid config reports no
+  missing stores and a resolving database; against a config with a missing
+  data source it flags that store, and `NTN.AddMissing` re-creates only it under
+  the existing "Vala Brain" database without duplicating the others.
 - **A-0002-08** (R-0002-15) `UpsertCoverage` for a technique creates a row the
   first time and updates that same row on a second call with the same technique
   (`internal/brain/coverage_test.go` `TestUpsertCoverageCreatesThenUpdates`).

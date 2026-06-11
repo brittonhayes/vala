@@ -125,28 +125,31 @@ project config; environment variables always take precedence.
 
 By default vala runs in ephemeral, in-memory mode — fine for a quick look,
 forgotten the moment you quit. Give it a persistent brain and your hunts, intel,
-evidence, and detections compound across sessions. Two ways, depending on whether
-you want an account:
+evidence, and detections compound across sessions. Just run vala — on first
+launch it detects what isn't set up and opens a guided setup where you pick a
+brain (re-run it any time with `vala setup`):
 
 ```sh
-vala init --local              # durable on-disk brain, no account needed
-vala init --parent <page-id>   # shared Notion-backed brain, one connected graph
+vala            # first launch opens setup automatically
+vala setup      # re-run to add, change, or repair a piece
 ```
 
-`--local` writes the brain to a single JSON file (`.vala/brain.json` by default)
-and records the path in `.vala.json`; narrative hunt pages land as readable
-Markdown beside it. It's the zero-dependency path — nothing to log into, and the
-whole brain is a portable, version-controllable artifact.
-
-`--parent` provisions the brain's databases under a Notion page and writes their
-data-source IDs into `.vala.json`. It's idempotent — re-run it any time to verify
-and reuse what's there rather than duplicating it.
+- **On-disk brain** — durable, no account. Writes the brain to a single JSON file
+  (`.vala/brain.json` by default) and records the path in `.vala.json`; narrative
+  hunt pages land as readable Markdown beside it. The zero-dependency path —
+  nothing to log into, and the whole brain is a portable, version-controllable
+  artifact.
+- **Notion brain** — shared with your team. Provisions a single **Vala Brain**
+  database with one data source per store (hunts, evidence, intel, detections,
+  backlog, memory, coverage) under a Notion page you choose, and writes the
+  data-source IDs into `.vala.json`. If a store ever goes missing, re-running
+  setup repairs it in place rather than leaving the brain half-broken.
 
 > [!NOTE]
-> The Notion path needs an authenticated [Notion CLI](https://github.com/makenotion/ntn)
-> (`ntn login`); the `--local` path needs nothing. Until a brain is configured,
-> vala reminds you on startup that it's in memory-only mode (silence it with
-> `--no-init-prompt`).
+> The Notion path needs the [Notion CLI](https://github.com/makenotion/ntn);
+> setup runs `ntn login` for you when you aren't authenticated yet. The on-disk
+> path needs nothing. Until a brain is configured, vala reminds you on startup
+> that it's in memory-only mode (silence it with `--no-init-prompt`).
 
 ## Give it context
 
@@ -155,7 +158,7 @@ places:
 
 **`VALA.md`** is what you write by hand — a plain Markdown file vala reads into
 every session: crown-jewel systems, where each log source lives, what "normal"
-looks like, detection naming conventions, prior incidents. `vala init` drops a
+looks like, detection naming conventions, prior incidents. Setup drops a
 commented starter in your project; fill in what matters.
 
 ```
@@ -306,8 +309,9 @@ As a shortcut, `SCANNER_MCP_URL` (plus `SCANNER_API_KEY`) registers Scanner with
 no config file. The session banner shows which sources connected; with none, vala
 reasons only over local files.
 
-**Notion IDs.** The `notion` values are data-source IDs — `vala init` fills them
-in for you. To wire databases by hand, resolve an ID with
+**Notion IDs.** The `notion` values are the parent `database` plus one
+data-source ID per store — `vala setup` fills them in for you. To wire them by
+hand, resolve an ID with
 `ntn datasources resolve <id>` and match each property name to the keys vala
 writes (`hunt_id`, `status`, `started_at`, relations like `hunts`/`detections`).
 Leave them empty to stay local.

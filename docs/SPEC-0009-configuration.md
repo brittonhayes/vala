@@ -15,7 +15,7 @@
 
 This spec defines vala's configuration: every setting, its default, the
 precedence between sources, and the environment variables that override them. It
-fixes how secrets are handled (environment-only) and how `vala init` persists
+fixes how secrets are handled (environment-only) and how `vala setup` persists
 the Notion IDs.
 
 It does **not** define what the settings do at runtime — those belong to the
@@ -95,9 +95,10 @@ specs that consume them (model/compaction to
 - **R-0009-08** If `SCANNER_MCP_URL` is set and no `scanner` server is already
   configured, vala MUST register a `scanner` server using that URL and
   `SCANNER_API_KEY`.
-- **R-0009-09** `vala init` MUST persist the provisioned Notion IDs to
-  `./.vala.json` under `notion`, preserving every other key in the file
-  byte-for-byte.
+- **R-0009-09** `vala setup` MUST persist the provisioned Notion IDs — the
+  parent `database` ID, each store's data-source ID, and `page_parent` — to
+  `./.vala.json` under `notion` via `config.SaveNotion`, preserving every other
+  key in the file byte-for-byte.
 
 ## 4. Behavior & interfaces
 
@@ -116,7 +117,7 @@ specs that consume them (model/compaction to
 | `max_steps` | int | `50` | — | SPEC-0008 |
 | `context_window` | int64 | `200000` | `VALA_CONTEXT_WINDOW` | SPEC-0008 |
 | `auto_compact_threshold` | float64 | `0.80` | `VALA_AUTO_COMPACT_THRESHOLD` | SPEC-0008 |
-| `notion` | `brain.DBIDs` | empty | — (set by `vala init`) | SPEC-0002 |
+| `notion` | `brain.DBIDs` | empty | — (set by `vala setup`) | SPEC-0002 |
 | `mcp` | []MCPServer | nil | `SCANNER_MCP_URL` (append) | SPEC-0007 |
 | `APIKey` | string | from env | `ANTHROPIC_API_KEY` | SPEC-0008 |
 
@@ -194,13 +195,18 @@ Secrets never appear in `config.json` / `.vala.json`.
 
 ```json
 "notion": {
+  "database": "",
   "evidence": "", "hunts": "", "intel": "",
-  "detections": "", "backlog": "", "page_parent": ""
+  "detections": "", "backlog": "", "memory": "", "coverage": "",
+  "page_parent": ""
 }
 ```
 
-Empty → in-memory brain. `vala init` fills these in (`config.SaveNotion`
-overlays only the `notion` key, pretty-printed, creating the file if absent).
+`database` is the parent "Vala Brain" database ID; each store key holds that
+store's data-source ID; `page_parent` is the brain's home page (where narrative
+hunt pages are written). Empty → in-memory brain. `vala setup` fills these in
+(`config.SaveNotion` overlays only the `notion` key, pretty-printed, creating
+the file if absent).
 
 ### Example `./.vala.json`
 
@@ -215,7 +221,7 @@ overlays only the `notion` key, pretty-printed, creating the file if absent).
   "mcp": [
     { "name": "scanner", "url": "https://acme.scanner.dev/mcp", "api_key_env": "SCANNER_API_KEY" }
   ],
-  "notion": { "evidence": "...", "hunts": "...", "intel": "...", "detections": "...", "backlog": "...", "page_parent": "..." }
+  "notion": { "database": "...", "evidence": "...", "hunts": "...", "intel": "...", "detections": "...", "backlog": "...", "memory": "...", "coverage": "...", "page_parent": "..." }
 }
 ```
 

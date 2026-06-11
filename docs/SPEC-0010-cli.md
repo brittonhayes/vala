@@ -1,7 +1,7 @@
 # SPEC-0010 · CLI
 
-> One binary: an interactive session by default, a one-shot `run`, brain
-> provisioning via `init`, and `version` — plus a handful of REPL commands.
+> One binary: an interactive session by default, a one-shot `run`, guided
+> onboarding via `setup`, and `version` — plus a handful of REPL commands.
 
 | Field | Value |
 |---|---|
@@ -27,6 +27,9 @@ permission gate ([SPEC-0011](SPEC-0011-permissions-and-safety.md)).
 - **One-shot** — `vala run "<prompt>"`, a single non-interactive task.
 - **First-run notice** — the startup prompt shown when no Notion brain is
   configured.
+- **Setup wizard** — `vala setup`, the guided onboarding flow that connects a
+  provider, provisions or repairs the brain, and wires up evidence; also
+  auto-launched by bare `vala` when something required is not yet configured.
 
 ## 3. Requirements
 
@@ -38,10 +41,14 @@ permission gate ([SPEC-0011](SPEC-0011-permissions-and-safety.md)).
 - **R-0010-02** `vala run <prompt...>` MUST run a single task non-interactively
   over the same toolbox, joining args into one prompt, recording a transcript,
   and never prompting at a TTY.
-- **R-0010-03** `vala init` MUST provision the Notion brain (see
-  [SPEC-0002](SPEC-0002-brain-and-persistence.md)) under a parent page and save
-  the IDs to `./.vala.json`; it MUST be idempotent and require an authenticated
-  Notion CLI.
+- **R-0010-03** `vala setup` MUST run the guided onboarding wizard: connect a
+  provider, choose and provision the brain, and wire up evidence. For the brain,
+  it MUST offer an on-disk ("local") `brain_file` or a Notion brain; choosing
+  Notion MUST prompt for the parent page ID, provision the single "Vala Brain"
+  database (see [SPEC-0002](SPEC-0002-brain-and-persistence.md)), and save the
+  IDs to `./.vala.json`. If the Notion CLI is not authenticated, the wizard MUST
+  suspend and run `ntn login` before provisioning. There is no separate `init`
+  command.
 - **R-0010-04** `vala version` MUST print the build version (set via `-ldflags`,
   falling back to VCS info or `dev`).
 - **R-0010-12** `vala connect [provider]` MUST guide the operator through
@@ -63,8 +70,13 @@ permission gate ([SPEC-0011](SPEC-0011-permissions-and-safety.md)).
 - **R-0010-06** `vala run` MUST default to denying non-read-only tools and MUST
   auto-approve all calls when `--yes` is given (equivalent to permission
   `allow`).
-- **R-0010-07** `vala init` MUST accept `--parent <page-id>` (prompted if
-  omitted) and `--force` (re-provision even if a brain is already configured).
+- **R-0010-07** When a Notion brain is already configured, `vala setup` MUST
+  verify it and repair it in place rather than duplicate it: if one or more data
+  sources are missing or unreachable it MUST re-create only the missing
+  store(s) under the existing "Vala Brain" database, and if the parent database
+  itself is gone it MUST re-provision a fresh single database (see
+  [SPEC-0002](SPEC-0002-brain-and-persistence.md)). A configured-but-incomplete
+  brain is treated as a broken state setup proactively offers to fix.
 - **R-0010-08** `--no-init-prompt` MUST suppress the first-run notice;
   `--require-brain` MUST make a missing brain a hard error instead of a warning.
 
@@ -72,7 +84,7 @@ permission gate ([SPEC-0011](SPEC-0011-permissions-and-safety.md)).
 
 - **R-0010-09** When no brain is configured, vala MUST notify the operator it is
   in ephemeral memory-only mode. At an interactive TTY it MUST offer to run
-  `vala init`; non-interactively it MUST print the notice and continue (never
+  `vala setup`; non-interactively it MUST print the notice and continue (never
   block automation).
 - **R-0010-10** A dismissed first-run prompt MUST be remembered (in
   `~/.config/vala/state.json`) so it is not shown again.
@@ -98,9 +110,8 @@ permission gate ([SPEC-0011](SPEC-0011-permissions-and-safety.md)).
 |---|---|---|
 | `vala` | interactive REPL | persistent flags below |
 | `vala run <prompt...>` | one-shot task | `--yes`, + persistent |
-| `vala setup` | guided onboarding (provider, brain, evidence) | + persistent |
+| `vala setup` | guided onboarding (provider, brain, evidence); provisions or repairs the brain | + persistent |
 | `vala connect [provider]` | connect/select an LLM provider | + persistent |
-| `vala init` | provision Notion brain | `--parent`, `--force`, + persistent |
 | `vala version` | print version | — |
 
 | Persistent flag | Effect |
@@ -135,8 +146,9 @@ brain is configured, else `Mem`.
   of config; an empty `--permission` leaves config's value.
 - **A-0010-03** (R-0010-06) `vala run` denies a `write` by default and permits it
   under `--yes`.
-- **A-0010-04** (R-0010-07) `vala init` re-run without `--force` against a valid
-  config does not duplicate databases.
+- **A-0010-04** (R-0010-07) `vala setup` against a valid Notion config verifies
+  and reuses the existing "Vala Brain" database; against a config missing a data
+  source it re-creates only the missing store and never duplicates the database.
 - **A-0010-05** (R-0010-09) With no brain and a non-interactive invocation, vala
   prints the notice and proceeds; with `--require-brain` it exits non-zero.
 - **A-0010-06** (R-0010-11) `/help`, `/clear`, `/compact` are recognized in the
@@ -144,8 +156,8 @@ brain is configured, else `Mem`.
 
 ## 6. Non-goals
 
-- **No additional subcommands.** The surface is `run`, `init`, `version`, and the
-  default REPL.
+- **No additional subcommands.** The surface is `run`, `setup`, `connect`,
+  `version`, and the default REPL.
 - **No scripting DSL.** One-shot automation is `vala run` with a natural-language
   prompt.
 
@@ -157,5 +169,5 @@ brain is configured, else `Mem`.
 ## 8. References
 
 - [SPEC-0009](SPEC-0009-configuration.md) — the config these flags override.
-- [SPEC-0002](SPEC-0002-brain-and-persistence.md) — what `vala init` provisions.
+- [SPEC-0002](SPEC-0002-brain-and-persistence.md) — what `vala setup` provisions.
 - [SPEC-0011](SPEC-0011-permissions-and-safety.md) — `--permission`/`--yes` semantics.

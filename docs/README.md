@@ -26,7 +26,7 @@ not a code listing — it is the set of promises that code must keep.
 | [SPEC-0007](SPEC-0007-evidence-and-mcp.md) | Evidence & MCP | Connecting evidence sources over MCP; file/shell tools |
 | [SPEC-0008](SPEC-0008-agent-and-session.md) | Agent & Session | The tool-use loop, auto-compaction, transcripts, the LLM client |
 | [SPEC-0009](SPEC-0009-configuration.md) | Configuration | Config schema, layering, environment variables |
-| [SPEC-0010](SPEC-0010-cli.md) | CLI | `vala`, `vala run`, `vala init`, `vala version`, flags, first-run |
+| [SPEC-0010](SPEC-0010-cli.md) | CLI | `vala`, `vala run`, `vala setup`, `vala version`, flags, first-run |
 | [SPEC-0011](SPEC-0011-permissions-and-safety.md) | Permissions & Safety | The permission gate, untrusted data, secret handling |
 | [SPEC-0012](SPEC-0012-coverage-and-feedback.md) | Coverage & Feedback | The coverage map, upsert-by-technique, hypothesis weighting, the feedback-stage metrics |
 | [SPEC-0013](SPEC-0013-maturity-and-autonomy.md) | Maturity & Autonomy | The HMM maturity dial (0–4), permission derivation, prompt framing — autonomy without modes |
