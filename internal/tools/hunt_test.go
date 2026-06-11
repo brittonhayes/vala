@@ -19,7 +19,7 @@ func newHuntRC(t *testing.T) (*RunContext, *brain.Mem, string) {
 		t.Fatalf("OpenHunt: %v", err)
 	}
 	rc := NewRunContext(bc)
-	rc.SetHunt(huntID, "q")
+	rc.SetHunt(huntID, "q", brain.HuntHypothesis)
 	return rc, mem, huntID
 }
 
@@ -114,17 +114,96 @@ func TestStoreHuntRejectsUnbackedFinding(t *testing.T) {
 	rc, _, _ := newHuntRC(t)
 	st := &StoreHunt{RC: rc}
 	res := run(t, st, map[string]any{
-		"outcome":  brain.HuntConfirmed,
-		"findings": []map[string]any{{"text": "no evidence cited"}},
+		"outcome":        brain.HuntConfirmed,
+		"detection_tier": brain.TierAutomated,
+		"tier_rationale": "x",
+		"findings":       []map[string]any{{"text": "no evidence cited"}},
+		"next_steps":     []string{"follow up"},
 	})
 	if !res.IsError {
 		t.Fatal("store_hunt should reject a finding with no evidence")
 	}
 }
 
+func TestValidateDataRecordsPlan(t *testing.T) {
+	rc, mem, huntID := newHuntRC(t)
+	res := run(t, &ValidateData{RC: rc}, map[string]any{
+		"sources": []string{"cloudtrail"}, "time_window": "90d", "validated": true,
+	})
+	if res.IsError {
+		t.Fatalf("validate_data failed: %s", res.Content)
+	}
+	if !rc.DataPlanValidated() {
+		t.Fatal("expected data plan to be marked validated")
+	}
+	ev := mem.RowsIn(brain.DBEvidence)
+	if len(ev) != 1 || ev[0].Props["kind"] != brain.EvidenceDataPlan || ev[0].Props["hunt"] != huntID {
+		t.Fatalf("expected one data_plan evidence row linked to hunt, got %v", ev)
+	}
+}
+
+func TestValidateDataRecordsGapOnFailure(t *testing.T) {
+	rc, mem, _ := newHuntRC(t)
+	res := run(t, &ValidateData{RC: rc}, map[string]any{
+		"sources": []string{"vpcflow"}, "validated": false, "gap": "no flow logs retained",
+	})
+	if res.IsError {
+		t.Fatalf("validate_data failed: %s", res.Content)
+	}
+	if rc.DataPlanValidated() {
+		t.Fatal("a failed check must not mark the data plan validated")
+	}
+	if gaps := rc.Gaps(); len(gaps) != 1 || gaps[0].Source != brain.EvidenceGap {
+		t.Fatalf("expected one recorded visibility gap, got %v", gaps)
+	}
+	ev := mem.RowsIn(brain.DBEvidence)
+	if len(ev) != 1 || ev[0].Props["kind"] != brain.EvidenceGap {
+		t.Fatalf("expected one visibility_gap evidence row, got %v", ev)
+	}
+}
+
+func TestStoreHuntRejectsMissingTier(t *testing.T) {
+	rc, _, _ := newHuntRC(t)
+	run(t, &ValidateData{RC: rc}, map[string]any{"sources": []string{"cloudtrail"}, "validated": true})
+	fres := run(t, &RecordFinding{RC: rc}, map[string]any{"claim": "f", "source": "query", "pointer": "q"})
+	fid := strings.TrimSpace(strings.TrimPrefix(strings.SplitN(fres.Content, "—", 2)[0], "recorded finding "))
+	// detection_tier is required by the schema; omit it and expect rejection.
+	res := run(t, &StoreHunt{RC: rc}, map[string]any{
+		"outcome":    brain.HuntConfirmed,
+		"findings":   []map[string]any{{"text": "f", "evidence": []string{fid}}},
+		"next_steps": []string{"x"},
+	})
+	if !res.IsError {
+		t.Fatal("store_hunt should reject a hunt with no detection-tier decision")
+	}
+}
+
+func TestStoreHuntRejectsQueryBeforeValidation(t *testing.T) {
+	rc, _, _ := newHuntRC(t)
+	// Query (record a finding) without validating data first.
+	fres := run(t, &RecordFinding{RC: rc}, map[string]any{"claim": "f", "source": "query", "pointer": "q"})
+	fid := strings.TrimSpace(strings.TrimPrefix(strings.SplitN(fres.Content, "—", 2)[0], "recorded finding "))
+	res := run(t, &StoreHunt{RC: rc}, map[string]any{
+		"outcome":        brain.HuntConfirmed,
+		"detection_tier": brain.TierAutomated,
+		"tier_rationale": "x",
+		"findings":       []map[string]any{{"text": "f", "evidence": []string{fid}}},
+		"next_steps":     []string{"x"},
+	})
+	if !res.IsError {
+		t.Fatal("store_hunt should reject querying before validating data")
+	}
+}
+
 func TestStoreHuntHappyPath(t *testing.T) {
 	rc, mem, huntID := newHuntRC(t)
-	// Record a finding first so the conclusion can cite it.
+	// Validate data before querying (stage 3), or store_hunt rejects the hunt.
+	if res := run(t, &ValidateData{RC: rc}, map[string]any{
+		"sources": []string{"cloudtrail"}, "validated": true,
+	}); res.IsError {
+		t.Fatalf("validate_data failed: %s", res.Content)
+	}
+	// Record a finding so the conclusion can cite it.
 	fres := run(t, &RecordFinding{RC: rc}, map[string]any{
 		"claim": "fact", "source": "query", "pointer": "q-1",
 	})
@@ -132,14 +211,20 @@ func TestStoreHuntHappyPath(t *testing.T) {
 
 	st := &StoreHunt{RC: rc}
 	res := run(t, st, map[string]any{
-		"outcome":  brain.HuntConfirmed,
-		"findings": []map[string]any{{"text": "fact confirmed", "evidence": []string{fid}}},
+		"outcome":        brain.HuntConfirmed,
+		"detection_tier": brain.TierAutomated,
+		"tier_rationale": "clean signal, low false positives",
+		"findings":       []map[string]any{{"text": "fact confirmed", "evidence": []string{fid}}},
+		"next_steps":     []string{"watch for variant behavior"},
 	})
 	if res.IsError {
 		t.Fatalf("store_hunt happy path failed: %s", res.Content)
 	}
 	if got := mem.Rows[huntID].Props["status"]; got != brain.HuntConfirmed {
 		t.Fatalf("hunt status = %v, want %q", got, brain.HuntConfirmed)
+	}
+	if got := mem.Rows[huntID].Props["detection_tier"]; got != brain.TierAutomated {
+		t.Fatalf("hunt detection_tier = %v, want %q", got, brain.TierAutomated)
 	}
 	if outcome, _ := rc.HuntOutcome(); outcome != brain.HuntConfirmed {
 		t.Fatalf("run context outcome = %q, want %q", outcome, brain.HuntConfirmed)

@@ -17,10 +17,10 @@ not a code listing — it is the set of promises that code must keep.
 
 | Spec | Title | Scope |
 |---|---|---|
-| [SPEC-0001](SPEC-0001-overview-and-hunt-loop.md) | Overview & the Hunt Loop | What vala is; the Scope → Hunt → Conclude → Automate loop |
-| [SPEC-0002](SPEC-0002-brain-and-persistence.md) | Brain & Persistence | The six-table graph, in-memory vs file vs Notion, shared memory, provisioning |
+| [SPEC-0001](SPEC-0001-overview-and-hunt-loop.md) | Overview & the Hunt Loop | What vala is; the eight-stage loop (scope, hypothesize, validate data, execute, deep-dive, decide, convert, feed back) and the detection-output hierarchy |
+| [SPEC-0002](SPEC-0002-brain-and-persistence.md) | Brain & Persistence | The seven-table graph, in-memory vs file vs Notion, shared memory, provisioning |
 | [SPEC-0003](SPEC-0003-tool-harness.md) | Tool Harness | The `Tool` interface, registry, permission gating, the toolbox |
-| [SPEC-0004](SPEC-0004-hunting-workflow.md) | Hunting Workflow | `recall`, `queue_hunt`, `open_hunt`, `record_finding`, `record_intel`, `link_artifacts`, `store_hunt` |
+| [SPEC-0004](SPEC-0004-hunting-workflow.md) | Hunting Workflow | `recall`, `queue_hunt`, `open_hunt`, `validate_data`, `record_finding`, `record_intel`, `link_artifacts`, `store_hunt`, `update_coverage` |
 | [SPEC-0005](SPEC-0005-detection-engine.md) | Detection Engine | Offline Sigma validation, condition grammar, field matching, tests |
 | [SPEC-0006](SPEC-0006-detection-authoring.md) | Detection Authoring | Reference exemplars, field-editing tools, runbook & tests |
 | [SPEC-0007](SPEC-0007-evidence-and-mcp.md) | Evidence & MCP | Connecting evidence sources over MCP; file/shell tools |
@@ -28,6 +28,8 @@ not a code listing — it is the set of promises that code must keep.
 | [SPEC-0009](SPEC-0009-configuration.md) | Configuration | Config schema, layering, environment variables |
 | [SPEC-0010](SPEC-0010-cli.md) | CLI | `vala`, `vala run`, `vala init`, `vala version`, flags, first-run |
 | [SPEC-0011](SPEC-0011-permissions-and-safety.md) | Permissions & Safety | The permission gate, untrusted data, secret handling |
+| [SPEC-0012](SPEC-0012-coverage-and-feedback.md) | Coverage & Feedback | The coverage map, upsert-by-technique, hypothesis weighting, the feedback-stage metrics |
+| [SPEC-0013](SPEC-0013-maturity-and-autonomy.md) | Maturity & Autonomy | The HMM maturity dial (0–4), permission derivation, prompt framing — autonomy without modes |
 
 ## How to read a spec
 

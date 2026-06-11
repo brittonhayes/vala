@@ -27,8 +27,17 @@ type Config struct {
 	Providers map[string]ProviderConfig `json:"providers"`
 	// MaxTokens caps the response size per turn.
 	MaxTokens int64 `json:"max_tokens"`
-	// Permission is the default permission mode: ask | allow | deny.
+	// Permission is the default permission mode: ask | allow | deny. Empty means
+	// "derive from Maturity" (see MaturityPermission): the maturity level sets the
+	// default autonomy, and an explicit permission (config, env, or flag) wins.
 	Permission string `json:"permission"`
+	// Maturity is the Hunting Maturity Model level (0–4) the harness runs at. It
+	// tunes autonomy: it sets the default permission mode and frames the agent's
+	// gating in the system prompt. It is NOT a behavioral mode — the loop and
+	// tools are identical at every level; only how much runs without approval
+	// changes. 0 (initial) investigates only; 1–2 (minimal/procedural) ask before
+	// writes; 3–4 (innovative/leading) run autonomously.
+	Maturity int `json:"maturity"`
 	// Allowlist names tools that may run without prompting.
 	Allowlist []string `json:"allowlist"`
 	// DetectionsDir is where Sigma detection rules live in a project.
@@ -125,13 +134,29 @@ func Default() Config {
 		Provider:      "anthropic",
 		Model:         "claude-opus-4-8",
 		MaxTokens:     8192,
-		Permission:    "ask",
+		Permission:    "", // derived from Maturity unless set explicitly
+		Maturity:      1,  // minimal: ask before writes
 		Allowlist:     nil,
 		DetectionsDir: "detections",
 		MaxSteps:      50,
 
 		ContextWindow:        200000,
 		AutoCompactThreshold: 0.80,
+	}
+}
+
+// MaturityPermission maps a Hunting Maturity Model level to the default
+// permission mode it implies: HMM0 investigates read-only (deny writes), HMM1–2
+// ask before each write, and HMM3–4 run autonomously (allow). It is the default
+// only — an explicitly configured permission always wins.
+func MaturityPermission(level int) string {
+	switch {
+	case level <= 0:
+		return "deny"
+	case level >= 3:
+		return "allow"
+	default:
+		return "ask"
 	}
 }
 
@@ -157,6 +182,11 @@ func Load(cwd string) (Config, error) {
 	}
 	if v := os.Getenv("VALA_PERMISSION"); v != "" {
 		cfg.Permission = v
+	}
+	if v := os.Getenv("VALA_MATURITY"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.Maturity = n
+		}
 	}
 	if v := os.Getenv("VALA_CONTEXT_WINDOW"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
@@ -189,6 +219,14 @@ func Load(cwd string) (Config, error) {
 				cfg.MCP[i].Env[name] = v
 			}
 		}
+	}
+
+	// Derive the default permission from the maturity level when no explicit
+	// permission was set anywhere (config file or VALA_PERMISSION). An explicit
+	// permission — including the --permission flag applied after Load — always
+	// wins, since it leaves Permission non-empty.
+	if cfg.Permission == "" {
+		cfg.Permission = MaturityPermission(cfg.Maturity)
 	}
 	return cfg, nil
 }

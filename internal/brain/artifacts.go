@@ -7,12 +7,14 @@ import (
 
 // Evidence is an immutable pointer backing a claim: a query ID, URL, file hash,
 // or log reference — never free-form prose. It is the row a hunt finding is
-// recorded as, linked back to the hunt it supports.
+// recorded as, linked back to the hunt it supports. Two kinds carry the data
+// stage's result: data_plan (a validated telemetry plan) and visibility_gap (a
+// failed telemetry check), so a missing data source is recorded, not skipped.
 type Evidence struct {
 	ID         string `json:"id"`
 	Claim      string `json:"claim"`
-	Source     string `json:"source"`  // query | url | file_hash | log_ref
-	Pointer    string `json:"pointer"` // the actual query/URL/hash
+	Source     string `json:"source"`  // query | url | file_hash | log_ref | data_plan | visibility_gap
+	Pointer    string `json:"pointer"` // the actual query/URL/hash, or the structured data plan
 	Confidence string `json:"confidence"`
 }
 

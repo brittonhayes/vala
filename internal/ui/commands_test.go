@@ -24,7 +24,7 @@ func (fakeProvider) ContextWindow() int64 { return 1000 }
 func TestConnectSwitchesProviderLive(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	m := newTestModel(t)
-	m.repl.Agent = agent.New(nil, tool.NewRegistry(), permission.New(permission.ModeAsk, nil), "", 1, "")
+	m.repl.Agent = agent.New(nil, tool.NewRegistry(), permission.New(permission.ModeAsk, nil), "", 1, 1, "")
 	if m.repl.Agent.Connected() {
 		t.Fatal("agent should start disconnected")
 	}

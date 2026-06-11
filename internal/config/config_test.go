@@ -72,6 +72,43 @@ func TestLoadCompactionEnvOverrides(t *testing.T) {
 	}
 }
 
+func TestMaturityPermissionMapping(t *testing.T) {
+	cases := map[int]string{0: "deny", 1: "ask", 2: "ask", 3: "allow", 4: "allow"}
+	for level, want := range cases {
+		if got := MaturityPermission(level); got != want {
+			t.Errorf("MaturityPermission(%d) = %q, want %q", level, got, want)
+		}
+	}
+}
+
+func TestLoadDerivesPermissionFromMaturity(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("VALA_MATURITY", "4")
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Maturity != 4 {
+		t.Fatalf("Maturity = %d, want 4", cfg.Maturity)
+	}
+	if cfg.Permission != "allow" {
+		t.Errorf("Permission = %q, want allow (derived from HMM4)", cfg.Permission)
+	}
+}
+
+func TestExplicitPermissionWinsOverMaturity(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("VALA_MATURITY", "4") // would imply allow
+	t.Setenv("VALA_PERMISSION", "deny")
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Permission != "deny" {
+		t.Errorf("Permission = %q, want deny (explicit wins over maturity)", cfg.Permission)
+	}
+}
+
 func TestLoadCompactionEnvIgnoresGarbage(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("VALA_CONTEXT_WINDOW", "not-a-number")

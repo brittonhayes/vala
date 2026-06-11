@@ -42,23 +42,27 @@ func (t *StoreHunt) Schema() tool.Schema {
 	}
 	return tool.Schema{
 		Properties: map[string]any{
-			"hypothesis": map[string]any{"type": "string", "description": "The hypothesis this hunt tested."},
-			"outcome":    map[string]any{"type": "string", "enum": []string{brain.HuntConfirmed, brain.HuntRefuted, brain.HuntInconclusive}, "description": "Whether the hypothesis was confirmed, refuted, or left inconclusive."},
-			"findings":   claimSchema,
-			"hypotheses": claimSchema,
-			"next_steps": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"hypothesis":     map[string]any{"type": "string", "description": "The hypothesis this hunt tested."},
+			"outcome":        map[string]any{"type": "string", "enum": []string{brain.HuntConfirmed, brain.HuntRefuted, brain.HuntInconclusive}, "description": "Whether the hypothesis was confirmed, refuted, or left inconclusive."},
+			"detection_tier": map[string]any{"type": "string", "enum": []string{brain.TierAutomated, brain.TierTriage, brain.TierRecurring, brain.TierPlaybook, brain.TierNoDetection}, "description": "The detection-output decision (highest-fidelity output this finding supports): tier1_automated (high-fidelity Sigma), tier2_triage (lower-fidelity Sigma), tier3_recurring_hunt, tier4_playbook, tier5_none_documented (justified no-build)."},
+			"tier_rationale": map[string]any{"type": "string", "description": "Why this tier: what the finding does or does not support. Required for tier5; recommended for all."},
+			"findings":       claimSchema,
+			"hypotheses":     claimSchema,
+			"next_steps":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 		},
-		Required: []string{"outcome", "findings"},
+		Required: []string{"outcome", "findings", "detection_tier"},
 	}
 }
 
 func (t *StoreHunt) Run(ctx context.Context, input json.RawMessage) (tool.Result, error) {
 	var in struct {
-		Hypothesis string        `json:"hypothesis"`
-		Outcome    string        `json:"outcome"`
-		Findings   []brain.Claim `json:"findings"`
-		Hypotheses []brain.Claim `json:"hypotheses"`
-		NextSteps  []string      `json:"next_steps"`
+		Hypothesis    string        `json:"hypothesis"`
+		Outcome       string        `json:"outcome"`
+		DetectionTier string        `json:"detection_tier"`
+		TierRationale string        `json:"tier_rationale"`
+		Findings      []brain.Claim `json:"findings"`
+		Hypotheses    []brain.Claim `json:"hypotheses"`
+		NextSteps     []string      `json:"next_steps"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return tool.Errorf("invalid input: %v", err), nil
@@ -73,23 +77,30 @@ func (t *StoreHunt) Run(ctx context.Context, input json.RawMessage) (tool.Result
 	}
 
 	page := brain.HuntPage{
-		HuntID:     t.RC.HuntID,
-		Question:   t.RC.HuntQuestion,
-		Hypothesis: in.Hypothesis,
-		Status:     in.Outcome,
-		Findings:   in.Findings,
-		Hypotheses: in.Hypotheses,
-		NextSteps:  in.NextSteps,
-		Evidence:   t.RC.Evidence(),
+		HuntID:            t.RC.HuntID,
+		Question:          t.RC.HuntQuestion,
+		Hypothesis:        in.Hypothesis,
+		Status:            in.Outcome,
+		Findings:          in.Findings,
+		Hypotheses:        in.Hypotheses,
+		NextSteps:         in.NextSteps,
+		Evidence:          t.RC.Evidence(),
+		HuntType:          t.RC.HuntType(),
+		DetectionTier:     in.DetectionTier,
+		TierRationale:     in.TierRationale,
+		DataPlanValidated: t.RC.DataPlanValidated(),
+		Gaps:              t.RC.Gaps(),
+		CoverageUpdated:   t.RC.CoverageUpdated(),
 	}
 
-	// Enforce the evidence invariant: every declarative finding must be backed.
-	if violations := brain.LintHuntPage(page); len(violations) > 0 {
-		return tool.Errorf("hunt page rejected — fix these findings and rewrite:\n- %s", strings.Join(violations, "\n- ")), nil
+	// Enforce the full PEAK gate: citation discipline, validate-before-query, a
+	// justified detection-tier decision, and a completed feedback stage.
+	if violations := brain.LintHunt(page); len(violations) > 0 {
+		return tool.Errorf("hunt rejected — fix these and call store_hunt again:\n- %s", strings.Join(violations, "\n- ")), nil
 	}
 
 	summary := summarizeFindings(in.Findings)
-	if err := t.RC.Brain.CloseHunt(ctx, t.RC.HuntID, in.Outcome, summary); err != nil {
+	if err := t.RC.Brain.CloseHunt(ctx, t.RC.HuntID, in.Outcome, summary, in.DetectionTier, in.TierRationale); err != nil {
 		return tool.Errorf("failed to close hunt: %v", err), nil
 	}
 	url, err := t.RC.Brain.WriteHuntPage(ctx, t.RC.HuntID, page)
@@ -100,15 +111,19 @@ func (t *StoreHunt) Run(ctx context.Context, input json.RawMessage) (tool.Result
 	if url == "" {
 		url = "(written)"
 	}
-	msg := "hunt stored (" + in.Outcome + "): " + url
-	switch in.Outcome {
-	case brain.HuntConfirmed:
-		// The deliverable of a confirmed hunt is an automated detection. Drive the
-		// Act phase: author a Sigma rule for the proven behavior and link it.
-		msg += "\n\nAct: the deliverable of a confirmed hunt is a detection. Author a Sigma rule for the proven behavior (with falsepositives, an inline runbook, and tests), validate and test it, then link it to this hunt with link_artifacts. If no detection is warranted, say so explicitly and why."
-	case brain.HuntRefuted, brain.HuntInconclusive:
-		msg += "\n\nAct: no detection is warranted. The retired hypothesis and its evidence are the deliverable; note any rule-tuning follow-ups in next_steps."
+	msg := "hunt stored (" + in.Outcome + ", " + in.DetectionTier + "): " + url
+	switch in.DetectionTier {
+	case brain.TierAutomated, brain.TierTriage:
+		// Tiers 1–2 convert to a Sigma rule — high-fidelity or triage-grade.
+		msg += "\n\nConvert: author a Sigma rule for the proven behavior (with falsepositives, an inline runbook, and tests), validate and test it, then link it to this hunt with link_artifacts. A tier2 rule should say in its description that it surfaces candidates for review."
+	case brain.TierRecurring:
+		msg += "\n\nConvert: no rule is feasible yet. Queue this hunt to re-run on a cadence with queue_hunt, capturing the query so it is reproducible."
+	case brain.TierPlaybook:
+		msg += "\n\nConvert: automation is premature. Write the investigation method and queries as a playbook (ntn or a file) and link it so future hunts can reuse it."
+	case brain.TierNoDetection:
+		msg += "\n\nConvert: no detection — the rationale recorded is the deliverable. If a visibility gap blocked this hunt, queue a forensic-readiness follow-up with queue_hunt."
 	}
+	msg += "\n\nFeed back: call update_coverage to record this technique's coverage state, and queue any follow-on hypotheses with queue_hunt."
 	return tool.Text(msg), nil
 }
 

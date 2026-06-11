@@ -70,7 +70,7 @@ type Agent struct {
 // operatorContext is the trusted standing context to embed (operator-authored
 // VALA.md plus shared brain memories); the caller assembles it so the agent
 // package stays free of the brain dependency. Empty means no context section.
-func New(client llm.Provider, registry *tool.Registry, gate *permission.Gate, workdir string, maxSteps int, operatorContext string) *Agent {
+func New(client llm.Provider, registry *tool.Registry, gate *permission.Gate, workdir string, maxSteps, maturityLevel int, operatorContext string) *Agent {
 	names := make([]string, 0)
 	for _, t := range registry.All() {
 		names = append(names, t.Name())
@@ -82,7 +82,7 @@ func New(client llm.Provider, registry *tool.Registry, gate *permission.Gate, wo
 		llm:      client,
 		registry: registry,
 		gate:     gate,
-		system:   SystemPrompt(workdir, names, operatorContext),
+		system:   SystemPrompt(workdir, names, maturityLevel, operatorContext),
 		maxSteps: maxSteps,
 	}
 }

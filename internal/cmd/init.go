@@ -178,6 +178,7 @@ func verifyExisting(ctx context.Context, store *brain.NTN, cfg config.Config) er
 		{"detections", cfg.Notion.Detections},
 		{"backlog", cfg.Notion.Backlog},
 		{"memory", cfg.Notion.Memory},
+		{"coverage", cfg.Notion.Coverage},
 	}
 	var missing []string
 	for _, c := range checks {

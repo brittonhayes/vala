@@ -69,6 +69,9 @@ func Schema() []DBSpec {
 				{"mitre", "rich_text"},
 				{"behavior", "rich_text"},
 				{"data_source", "rich_text"},
+				{"hunt_type", "select"},
+				{"detection_tier", "select"},
+				{"tier_rationale", "rich_text"},
 				{"findings", "rich_text"},
 				{"started_at", "date"},
 				{"ended_at", "date"},
@@ -131,6 +134,20 @@ func Schema() []DBSpec {
 			},
 			Relations: []RelationSpec{{"hunt", DBHunts}},
 		},
+		{
+			Name:  DBCoverage,
+			Title: "Vala Coverage",
+			Props: []PropSpec{
+				{"technique", "title"},
+				{"tactic", "rich_text"},
+				{"status", "status"},
+				{"fidelity", "select"},
+				{"detections", "rich_text"},
+				{"updated_at", "date"},
+			},
+			Relations:     []RelationSpec{{"hunts", DBHunts}, {"detections", DBDetections}},
+			StatusOptions: map[string][]string{"status": {CoverageCovered, CoverageThin, CoverageUncovered}},
+		},
 	}
 }
 
@@ -145,6 +162,7 @@ func DBIDsFromMap(ds map[string]string, parent string) DBIDs {
 		Detections: ds[DBDetections],
 		Backlog:    ds[DBBacklog],
 		Memory:     ds[DBMemory],
+		Coverage:   ds[DBCoverage],
 		Parent:     parent,
 	}
 }

@@ -76,11 +76,19 @@ specs that consume them (model/compaction to
 ### Defaults
 
 - **R-0009-06** Defaults MUST be: `provider=anthropic`, `model=claude-opus-4-8`, `max_tokens=8192`,
-  `permission=ask`, `detections_dir=detections`, `max_steps=50`,
-  `context_window=200000`, `auto_compact_threshold=0.80`, empty `notion`, empty
-  `mcp`, nil `allowlist`.
+  `permission=""` (empty — derived from `maturity`, see R-0009-13), `maturity=1`,
+  `detections_dir=detections`, `max_steps=50`, `context_window=200000`,
+  `auto_compact_threshold=0.80`, empty `notion`, empty `mcp`, nil `allowlist`.
 - **R-0009-07** An empty `notion` block MUST select the in-memory brain
   ([SPEC-0002](SPEC-0002-brain-and-persistence.md) R-0002-09).
+- **R-0009-13** `maturity` is the Hunting Maturity Model level (`0–4`, default
+  `1`), overridable by `VALA_MATURITY` (malformed value ignored). When
+  `permission` is left unset (empty after all layers), it MUST be **derived** from
+  `maturity` via `config.MaturityPermission` at the end of `Load`:
+  `0 → deny`, `1–2 → ask`, `3–4 → allow`. An explicit `permission` — from config,
+  `VALA_PERMISSION`, or the `--permission` flag — always wins, since it leaves
+  `permission` non-empty and the derivation only fills an empty value. See
+  [SPEC-0013](SPEC-0013-maturity-and-autonomy.md) for the full maturity model.
 
 ### Convenience & persistence
 
@@ -101,7 +109,8 @@ specs that consume them (model/compaction to
 | `providers` | map[string]ProviderConfig | empty | — | SPEC-0008 |
 | `model` | string | `claude-opus-4-8` | `VALA_MODEL` | SPEC-0008 |
 | `max_tokens` | int64 | `8192` | — | SPEC-0008 |
-| `permission` | string | `ask` | `VALA_PERMISSION` | SPEC-0011 |
+| `permission` | string | `""` (derived from `maturity`) | `VALA_PERMISSION` | SPEC-0011 |
+| `maturity` | int | `1` | `VALA_MATURITY` | SPEC-0013 |
 | `allowlist` | []string | nil | — | SPEC-0011 |
 | `detections_dir` | string | `detections` | — | SPEC-0006 |
 | `max_steps` | int | `50` | — | SPEC-0008 |
@@ -118,7 +127,8 @@ specs that consume them (model/compaction to
 | `<provider>_API_KEY` | the active provider's key (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`); never persisted, takes precedence over the credential store |
 | `VALA_PROVIDER` | override `provider` |
 | `VALA_MODEL` | override `model` |
-| `VALA_PERMISSION` | override `permission` (`ask`/`allow`/`deny`) |
+| `VALA_PERMISSION` | override `permission` (`ask`/`allow`/`deny`); wins over the maturity-derived default |
+| `VALA_MATURITY` | override `maturity` (int 0–4; malformed ignored); sets the default `permission` when none is set explicitly |
 | `VALA_CONTEXT_WINDOW` | override `context_window` (int; malformed ignored) |
 | `VALA_AUTO_COMPACT_THRESHOLD` | override `auto_compact_threshold` (float; malformed ignored) |
 | `SCANNER_MCP_URL` | register a `scanner` MCP server if none configured |
@@ -224,6 +234,11 @@ overlays only the `notion` key, pretty-printed, creating the file if absent).
   `Load` appends one named `scanner` with `api_key_env=SCANNER_API_KEY`.
 - **A-0009-07** (R-0009-09) `SaveNotion` overlays `notion` and leaves an existing
   unrelated key unchanged.
+- **A-0009-08** (R-0009-13) With no `permission` set, `Load` derives it from
+  `maturity` (`0→deny`, `1–2→ask`, `3–4→allow`); with `permission` set explicitly
+  (config, `VALA_PERMISSION`, or `--permission`), `Load` leaves it unchanged
+  regardless of `maturity`; `VALA_MATURITY=3` and no explicit permission yields
+  `allow`.
 
 ## 6. Non-goals
 
@@ -239,3 +254,5 @@ overlays only the `notion` key, pretty-printed, creating the file if absent).
 
 - [SPEC-0002](SPEC-0002-brain-and-persistence.md) — `DBIDs` and brain selection.
 - [SPEC-0010](SPEC-0010-cli.md) — flags that override `model`/`permission`.
+- [SPEC-0011](SPEC-0011-permissions-and-safety.md) — the permission gate `permission` feeds.
+- [SPEC-0013](SPEC-0013-maturity-and-autonomy.md) — `maturity` and the permission derivation.
