@@ -26,8 +26,9 @@ func TestBuiltinLookup(t *testing.T) {
 }
 
 func TestContextWindowFor(t *testing.T) {
-	if got := contextWindowFor("anthropic", "claude-opus-4-8"); got != 200000 {
-		t.Errorf("known model window = %d, want 200000", got)
+	// Opus 4.8 ships a 1M-token window natively (the catalog's source of truth).
+	if got := contextWindowFor("anthropic", "claude-opus-4-8"); got != 1000000 {
+		t.Errorf("known model window = %d, want 1000000", got)
 	}
 	// An unknown model falls back to the conservative default.
 	if got := contextWindowFor("ollama", "some-random-local-model"); got != defaultContextWindow {

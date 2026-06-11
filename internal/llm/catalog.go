@@ -19,9 +19,11 @@ type ModelInfo struct {
 // run with defaultContextWindow.
 var catalog = map[string][]ModelInfo{
 	"anthropic": {
-		{ID: "claude-opus-4-8", ContextWindow: 200000},
+		// Opus 4.8 and Sonnet 4.6 ship a 1M-token window natively (the default,
+		// at standard pricing — no context-1m beta header on the 4.x family).
+		{ID: "claude-opus-4-8", ContextWindow: 1000000},
 		{ID: "claude-opus-4-1", ContextWindow: 200000},
-		{ID: "claude-sonnet-4-6", ContextWindow: 200000},
+		{ID: "claude-sonnet-4-6", ContextWindow: 1000000},
 		{ID: "claude-sonnet-4-5", ContextWindow: 200000},
 		{ID: "claude-haiku-4-5", ContextWindow: 200000},
 		{ID: "claude-3-5-haiku-latest", ContextWindow: 200000},
@@ -40,7 +42,7 @@ var catalog = map[string][]ModelInfo{
 		{ID: "gemini-2.0-flash", ContextWindow: 1048576},
 	},
 	"openrouter": {
-		{ID: "anthropic/claude-opus-4-8", ContextWindow: 200000},
+		{ID: "anthropic/claude-opus-4-8", ContextWindow: 1000000},
 		{ID: "openai/gpt-5", ContextWindow: 400000},
 		{ID: "google/gemini-2.5-pro", ContextWindow: 1048576},
 	},
