@@ -9,6 +9,7 @@ const (
 	DBDetections = "detections"
 	DBBacklog    = "backlog"
 	DBMemory     = "memory"
+	DBCoverage   = "coverage"
 )
 
 // Hunt status values (the Hunts state machine). A hunt opens Open, and closes
@@ -18,6 +19,50 @@ const (
 	HuntConfirmed    = "Confirmed"
 	HuntRefuted      = "Refuted"
 	HuntInconclusive = "Inconclusive"
+)
+
+// Hunt types (PEAK). Every hunt declares which style it runs: hypothesis-driven
+// (a specific predicted TTP), baseline / exploratory data analysis (characterize
+// normal, then surface deviations), or model-assisted (M-ATH — reason over
+// algorithmic leads like clustering or outliers in the data the agent pulls).
+const (
+	HuntHypothesis    = "hypothesis"
+	HuntBaseline      = "baseline"
+	HuntModelAssisted = "model_assisted"
+)
+
+// Detection-output tiers (the hierarchy of detection outputs). Every hunt closes
+// with one tier decision and a rationale: pick the highest-fidelity output the
+// finding supports. Tiers 1–2 produce a Sigma rule; tier 3 a recurring hunt;
+// tier 4 a playbook; tier 5 a justified decision to build nothing.
+const (
+	TierAutomated   = "tier1_automated"      // production-grade, high-fidelity Sigma rule
+	TierTriage      = "tier2_triage"         // lower-fidelity Sigma that surfaces candidates for review
+	TierRecurring   = "tier3_recurring_hunt" // re-run the hunt on a cadence; no rule yet feasible
+	TierPlaybook    = "tier4_playbook"       // documented investigation method for future hunts
+	TierNoDetection = "tier5_none_documented" // justified no-build (benign, out of scope, or a visibility gap)
+)
+
+// Evidence kinds (the Source field on an Evidence row). The first four are the
+// classic pointer kinds; data_plan and visibility_gap let the data-validation
+// stage record its result as a first-class, hunt-linked finding rather than a
+// silent skip.
+const (
+	EvidenceQuery    = "query"
+	EvidenceURL      = "url"
+	EvidenceFileHash = "file_hash"
+	EvidenceLogRef   = "log_ref"
+	EvidenceDataPlan = "data_plan"      // a validated telemetry plan: sources, window, retention
+	EvidenceGap      = "visibility_gap" // a failed telemetry check: telemetry missing or incomplete
+)
+
+// Coverage status values (the Coverage state machine for a technique): is this
+// ATT&CK technique covered by a reliable detection, thinly covered, or not at
+// all? The Feedback stage upserts coverage as hunts conclude.
+const (
+	CoverageCovered    = "Covered"
+	CoverageThin       = "Thin"
+	CoverageUncovered  = "Uncovered"
 )
 
 // Backlog status values. A trigger is queued as a hypothesis, gets opened into
@@ -55,6 +100,8 @@ func New(n Notion) *Client {
 				return ntn.DBs.Backlog
 			case DBMemory:
 				return ntn.DBs.Memory
+			case DBCoverage:
+				return ntn.DBs.Coverage
 			}
 			return logical
 		}

@@ -173,6 +173,7 @@ type DBIDs struct {
 	Detections string `json:"detections"`
 	Backlog    string `json:"backlog"`
 	Memory     string `json:"memory"`
+	Coverage   string `json:"coverage"`
 	Parent     string `json:"page_parent"`
 }
 

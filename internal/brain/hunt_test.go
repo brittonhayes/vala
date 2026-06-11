@@ -35,11 +35,14 @@ func TestHuntLifecycle(t *testing.T) {
 		t.Fatal("RecordFinding returned empty id")
 	}
 
-	if err := c.CloseHunt(ctx, huntID, HuntConfirmed, "GuardDuty was disabled"); err != nil {
+	if err := c.CloseHunt(ctx, huntID, HuntConfirmed, "GuardDuty was disabled", TierAutomated, "clean, high-fidelity signal"); err != nil {
 		t.Fatalf("CloseHunt: %v", err)
 	}
 	if got := mem.Rows[huntID].Props["status"]; got != HuntConfirmed {
 		t.Fatalf("closed hunt should be %q, got %v", HuntConfirmed, got)
+	}
+	if got := mem.Rows[huntID].Props["detection_tier"]; got != TierAutomated {
+		t.Fatalf("closed hunt should record tier %q, got %v", TierAutomated, got)
 	}
 }
 

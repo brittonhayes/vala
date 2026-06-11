@@ -20,6 +20,14 @@ type Hunt struct {
 	// They are optional so a hunt can still open from a bare question.
 	Behavior   string `json:"behavior"`
 	DataSource string `json:"data_source"`
+	// HuntType is the PEAK hunt style: hypothesis | baseline | model_assisted.
+	// It defaults to hypothesis when unset.
+	HuntType string `json:"hunt_type"`
+	// DetectionTier and TierRationale record the detection-output decision made
+	// when the hunt closes (see the Tier* constants). They are set by CloseHunt,
+	// not OpenHunt.
+	DetectionTier string `json:"detection_tier"`
+	TierRationale string `json:"tier_rationale"`
 }
 
 // HuntPage is the structured narrative generated for a completed hunt. Render
@@ -35,6 +43,16 @@ type HuntPage struct {
 	Evidence   []Evidence
 	Hypotheses []Claim
 	NextSteps  []string
+	// PEAK stage state. HuntType is the hunt style; DetectionTier and
+	// TierRationale are the Document-&-Decide deliverable; DataPlanValidated,
+	// Gaps, and CoverageUpdated record whether the data-validation and feedback
+	// stages ran. LintHunt enforces the invariants over these.
+	HuntType          string
+	DetectionTier     string
+	TierRationale     string
+	DataPlanValidated bool
+	Gaps              []Evidence
+	CoverageUpdated   bool
 }
 
 // Render produces the hunt-page markdown with the standard section skeleton.
@@ -51,6 +69,9 @@ func (p HuntPage) Render() string {
 	if p.Status != "" {
 		fmt.Fprintf(&b, "\n**Outcome:** %s\n", p.Status)
 	}
+	if p.HuntType != "" {
+		fmt.Fprintf(&b, "**Hunt type:** %s\n", p.HuntType)
+	}
 
 	b.WriteString("\n## Findings\n\n")
 	for _, c := range p.Findings {
@@ -66,6 +87,29 @@ func (p HuntPage) Render() string {
 	b.WriteString("| ID | Kind | Pointer | Confidence |\n|---|---|---|---|\n")
 	for _, e := range p.Evidence {
 		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", e.ID, e.Source, e.Pointer, e.Confidence)
+	}
+
+	if p.DataPlanValidated || len(p.Gaps) > 0 {
+		b.WriteString("\n## Data plan & visibility gaps\n\n")
+		if p.DataPlanValidated {
+			b.WriteString("- Telemetry validated before execution.\n")
+		}
+		for _, g := range p.Gaps {
+			fmt.Fprintf(&b, "- Visibility gap: %s%s\n", g.Claim, citeSuffix([]string{g.ID}))
+		}
+	}
+
+	if p.DetectionTier != "" {
+		b.WriteString("\n## Detection decision\n\n")
+		fmt.Fprintf(&b, "**Tier:** %s\n", p.DetectionTier)
+		if p.TierRationale != "" {
+			fmt.Fprintf(&b, "\n%s\n", p.TierRationale)
+		}
+	}
+
+	if p.CoverageUpdated {
+		b.WriteString("\n## Coverage impact\n\n")
+		b.WriteString("- Coverage map updated for this hunt's technique.\n")
 	}
 
 	b.WriteString("\n## Open hypotheses\n\n")
@@ -111,6 +155,51 @@ func LintHuntPage(p HuntPage) []string {
 	return violations
 }
 
+// LintHunt is the full PEAK gate run before a hunt is stored. It layers the loop
+// invariants on top of the citation check (LintHuntPage): data was validated
+// before it was queried, a detection-tier decision was made and justified, and
+// the feedback stage left a coverage delta or a follow-on action. A hunt that
+// violates any of these is not "high quality" and must not close.
+func LintHunt(p HuntPage) []string {
+	violations := LintHuntPage(p)
+
+	// Stage 3 before Stage 4: if the hunt queried evidence, it must have first
+	// recorded a validated data plan. A recorded visibility gap counts — a failed
+	// check is a real, documented outcome, not a skipped step.
+	queried := false
+	for _, e := range p.Evidence {
+		if e.Source == EvidenceQuery {
+			queried = true
+			break
+		}
+	}
+	if queried && !p.DataPlanValidated && len(p.Gaps) == 0 {
+		violations = append(violations, "queried evidence before validating data availability: call validate_data first (a failed check is recorded as a visibility gap, never skipped)")
+	}
+
+	// Stage 6: every hunt closes with a detection-output decision, and it must be
+	// justified — a no-build (tier 5) most of all.
+	switch p.DetectionTier {
+	case "":
+		violations = append(violations, "no detection-output decision: store_hunt must pick a detection_tier (tier1_automated … tier5_none_documented)")
+	case TierNoDetection:
+		if strings.TrimSpace(p.TierRationale) == "" {
+			violations = append(violations, "a no-build decision (tier5_none_documented) must be justified: give a tier_rationale")
+		}
+	}
+	if p.DetectionTier != "" && strings.TrimSpace(p.TierRationale) == "" {
+		violations = append(violations, "detection-tier decision is unjustified: give a tier_rationale for the chosen tier")
+	}
+
+	// Stage 8: feedback must leave the coverage map updated or a follow-on action
+	// queued, so each hunt compounds into the next.
+	if !p.CoverageUpdated && len(p.NextSteps) == 0 {
+		violations = append(violations, "feedback stage incomplete: call update_coverage and/or record at least one follow-on next step")
+	}
+
+	return violations
+}
+
 // OpenHunt creates a Hunts row in the Open state and returns its ID.
 func (c *Client) OpenHunt(ctx context.Context, h Hunt) (huntID string, err error) {
 	props := map[string]any{
@@ -126,6 +215,9 @@ func (c *Client) OpenHunt(ctx context.Context, h Hunt) (huntID string, err error
 	}
 	if h.DataSource != "" {
 		props["data_source"] = h.DataSource
+	}
+	if h.HuntType != "" {
+		props["hunt_type"] = h.HuntType
 	}
 	return c.n.CreateRow(ctx, c.dbName(DBHunts), props)
 }
@@ -144,13 +236,21 @@ func (c *Client) RecordFinding(ctx context.Context, huntID string, e Evidence) (
 	})
 }
 
-// CloseHunt finalizes a Hunts row with its outcome status and a findings summary.
-func (c *Client) CloseHunt(ctx context.Context, huntID, status, findings string) error {
-	return c.n.UpdateRow(ctx, huntID, map[string]any{
+// CloseHunt finalizes a Hunts row with its outcome status, a findings summary,
+// and the detection-output decision (tier + rationale) made for the hunt.
+func (c *Client) CloseHunt(ctx context.Context, huntID, status, findings, detectionTier, tierRationale string) error {
+	props := map[string]any{
 		"status":   status,
 		"findings": findings,
 		"ended_at": nowRFC3339(),
-	})
+	}
+	if detectionTier != "" {
+		props["detection_tier"] = detectionTier
+	}
+	if tierRationale != "" {
+		props["tier_rationale"] = tierRationale
+	}
+	return c.n.UpdateRow(ctx, huntID, props)
 }
 
 // WriteHuntPage renders and creates the narrative hunt page, returning its URL.

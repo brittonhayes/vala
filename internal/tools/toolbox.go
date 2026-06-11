@@ -41,14 +41,17 @@ func Toolbox(dir string, rc *RunContext, evidence ...tool.Tool) *tool.Registry {
 		&SetDetectionRunbook{Dir: dir},
 		&ManageDetectionTests{Dir: dir},
 		// Hunting: recall what's already known, queue a trigger, open a hunt,
-		// record findings and intel, link artifacts, store it.
+		// validate the data, record findings and intel, link artifacts, store it,
+		// and update the coverage map in feedback.
 		&Recall{RC: rc},
 		&QueueHunt{RC: rc},
 		&OpenHunt{RC: rc},
+		&ValidateData{RC: rc},
 		&RecordFinding{RC: rc},
 		&RecordIntel{RC: rc},
 		&LinkArtifacts{RC: rc},
 		&StoreHunt{RC: rc},
+		&UpdateCoverage{RC: rc},
 		// Shared memory: record durable environment facts to the brain so the
 		// whole team's future sessions start informed.
 		&Remember{RC: rc},

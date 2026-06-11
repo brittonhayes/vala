@@ -19,7 +19,7 @@ func newHuntRC(t *testing.T) (*RunContext, *brain.Mem, string) {
 		t.Fatalf("OpenHunt: %v", err)
 	}
 	rc := NewRunContext(bc)
-	rc.SetHunt(huntID, "q")
+	rc.SetHunt(huntID, "q", brain.HuntHypothesis)
 	return rc, mem, huntID
 }
 
@@ -124,7 +124,13 @@ func TestStoreHuntRejectsUnbackedFinding(t *testing.T) {
 
 func TestStoreHuntHappyPath(t *testing.T) {
 	rc, mem, huntID := newHuntRC(t)
-	// Record a finding first so the conclusion can cite it.
+	// Validate data before querying (stage 3), or store_hunt rejects the hunt.
+	if res := run(t, &ValidateData{RC: rc}, map[string]any{
+		"sources": []string{"cloudtrail"}, "validated": true,
+	}); res.IsError {
+		t.Fatalf("validate_data failed: %s", res.Content)
+	}
+	// Record a finding so the conclusion can cite it.
 	fres := run(t, &RecordFinding{RC: rc}, map[string]any{
 		"claim": "fact", "source": "query", "pointer": "q-1",
 	})
@@ -132,14 +138,20 @@ func TestStoreHuntHappyPath(t *testing.T) {
 
 	st := &StoreHunt{RC: rc}
 	res := run(t, st, map[string]any{
-		"outcome":  brain.HuntConfirmed,
-		"findings": []map[string]any{{"text": "fact confirmed", "evidence": []string{fid}}},
+		"outcome":        brain.HuntConfirmed,
+		"detection_tier": brain.TierAutomated,
+		"tier_rationale": "clean signal, low false positives",
+		"findings":       []map[string]any{{"text": "fact confirmed", "evidence": []string{fid}}},
+		"next_steps":     []string{"watch for variant behavior"},
 	})
 	if res.IsError {
 		t.Fatalf("store_hunt happy path failed: %s", res.Content)
 	}
 	if got := mem.Rows[huntID].Props["status"]; got != brain.HuntConfirmed {
 		t.Fatalf("hunt status = %v, want %q", got, brain.HuntConfirmed)
+	}
+	if got := mem.Rows[huntID].Props["detection_tier"]; got != brain.TierAutomated {
+		t.Fatalf("hunt detection_tier = %v, want %q", got, brain.TierAutomated)
 	}
 	if outcome, _ := rc.HuntOutcome(); outcome != brain.HuntConfirmed {
 		t.Fatalf("run context outcome = %q, want %q", outcome, brain.HuntConfirmed)

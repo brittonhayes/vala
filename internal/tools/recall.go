@@ -35,13 +35,14 @@ var recallScopes = []struct {
 	{"intel", brain.DBIntel, []string{"kind", "value", "confidence"}},
 	{"detections", brain.DBDetections, []string{"title", "status", "path"}},
 	{"backlog", brain.DBBacklog, []string{"hypothesis", "status", "priority"}},
+	{"coverage", brain.DBCoverage, []string{"technique", "status", "fidelity"}},
 }
 
 func (t *Recall) Schema() tool.Schema {
 	return tool.Schema{
 		Properties: map[string]any{
 			"query": map[string]any{"type": "string", "description": "Free-text to match against prior artifacts: a behavior, MITRE technique, entity, or keyword. Empty lists the most recent."},
-			"scope": map[string]any{"type": "string", "enum": []string{"all", "hunts", "intel", "detections", "backlog"}, "description": "Which part of the brain to search. Defaults to all."},
+			"scope": map[string]any{"type": "string", "enum": []string{"all", "hunts", "intel", "detections", "backlog", "coverage"}, "description": "Which part of the brain to search. Defaults to all. Use 'coverage' to surface thin/uncovered ATT&CK techniques when scoping the next hunt."},
 			"limit": map[string]any{"type": "integer", "description": "Max results per scope (default 5)."},
 		},
 		Required: []string{"query"},

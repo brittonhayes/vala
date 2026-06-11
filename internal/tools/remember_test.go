@@ -15,7 +15,7 @@ func TestRememberWritesSharedMemory(t *testing.T) {
 	mem := brain.NewMem()
 	rc := NewRunContext(brain.New(mem))
 	rc.Author = "alice"
-	rc.SetHunt("hunts_0001", "did anyone disable GuardDuty?")
+	rc.SetHunt("hunts_0001", "did anyone disable GuardDuty?", brain.HuntHypothesis)
 
 	res := run(t, &Remember{RC: rc}, map[string]any{"fact": "auth logs live in Okta"})
 	if res.IsError {
