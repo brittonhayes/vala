@@ -29,7 +29,8 @@ not a code listing — it is the set of promises that code must keep.
 | [SPEC-0010](SPEC-0010-cli.md) | CLI | `vala`, `vala run`, `vala setup`, `vala version`, flags, first-run |
 | [SPEC-0011](SPEC-0011-permissions-and-safety.md) | Permissions & Safety | The permission gate, untrusted data, secret handling |
 | [SPEC-0012](SPEC-0012-coverage-and-feedback.md) | Coverage & Feedback | The coverage map, upsert-by-technique, hypothesis weighting, the feedback-stage metrics |
-| [SPEC-0013](SPEC-0013-maturity-and-autonomy.md) | Maturity & Autonomy | The HMM maturity dial (0–4), permission derivation, prompt framing — autonomy without modes |
+| [SPEC-0013](SPEC-0013-maturity-and-autonomy.md) | Maturity & Autonomy | The HMM maturity dial (0–4), permission derivation, prompt framing — autonomy, orthogonal to modes |
+| [SPEC-0014](SPEC-0014-modes-and-skills.md) | Modes & Skills | Selectable specializations (hunt, detect), the tool filter, the `/mode` command, and Claude-Code-style skills |
 
 ## How to read a spec
 

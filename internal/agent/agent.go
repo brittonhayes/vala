@@ -12,7 +12,9 @@ import (
 	"strings"
 
 	"github.com/brittonhayes/vala/internal/llm"
+	"github.com/brittonhayes/vala/internal/mode"
 	"github.com/brittonhayes/vala/internal/permission"
+	"github.com/brittonhayes/vala/internal/skills"
 	"github.com/brittonhayes/vala/internal/tool"
 )
 
@@ -59,6 +61,16 @@ func (e Events) usage(in, out int64) {
 	}
 }
 
+// Session carries the per-session specialization the agent applies on top of the
+// provider, registry, and gate: the active mode, the discovered skills it can
+// load, and the names of the MCP evidence tools (which stay exposed in every
+// mode regardless of the mode's tool policy).
+type Session struct {
+	Mode          mode.Mode
+	Skills        *skills.Set
+	EvidenceNames []string
+}
+
 // Agent ties together the model provider, tools, and permission gate.
 type Agent struct {
 	llm      llm.Provider
@@ -66,33 +78,105 @@ type Agent struct {
 	gate     *permission.Gate
 	system   string
 	maxSteps int
+
+	// Mode state. workdir/maturity/opCtx/skills/evidence are retained so SetMode
+	// can recompute the system prompt and the exposed tool set in place.
+	mode       mode.Mode
+	activeTool func(tool.Tool) bool // exposure filter derived from the mode
+	workdir    string
+	maturity   int
+	opCtx      string
+	skills     *skills.Set
+	evidence   map[string]bool
 }
 
 // New constructs an Agent. workdir is used only to build the system prompt.
 // operatorContext is the trusted standing context to embed (operator-authored
 // VALA.md plus shared brain memories); the caller assembles it so the agent
 // package stays free of the brain dependency. Empty means no context section.
-func New(client llm.Provider, registry *tool.Registry, gate *permission.Gate, workdir string, maxSteps, maturityLevel int, operatorContext string) *Agent {
-	names := make([]string, 0)
-	for _, t := range registry.All() {
-		names = append(names, t.Name())
-	}
+// sess supplies the initial mode, the skill catalog, and the evidence tool names.
+func New(client llm.Provider, registry *tool.Registry, gate *permission.Gate, workdir string, maxSteps, maturityLevel int, operatorContext string, sess Session) *Agent {
 	if maxSteps <= 0 {
 		maxSteps = 50
 	}
-	return &Agent{
+	evidence := make(map[string]bool, len(sess.EvidenceNames))
+	for _, n := range sess.EvidenceNames {
+		evidence[n] = true
+	}
+	a := &Agent{
 		llm:      client,
 		registry: registry,
 		gate:     gate,
-		system:   SystemPrompt(workdir, names, maturityLevel, operatorContext),
 		maxSteps: maxSteps,
+		workdir:  workdir,
+		maturity: maturityLevel,
+		opCtx:    operatorContext,
+		skills:   sess.Skills,
+		evidence: evidence,
 	}
+	a.applyMode(sess.Mode)
+	return a
 }
 
 // SetProvider swaps the model provider in place, so an operator can switch
 // providers mid-session with /connect without losing the conversation. The
 // system prompt and toolbox are unaffected.
 func (a *Agent) SetProvider(p llm.Provider) { a.llm = p }
+
+// SetMode swaps the active mode in place, so an operator can switch focus
+// mid-session with /mode without losing the conversation. It recomputes the
+// system prompt (mode body + active skills) and the exposed tool set. The
+// provider, gate, registry, and history are unaffected.
+func (a *Agent) SetMode(m mode.Mode) { a.applyMode(m) }
+
+// Mode reports the active mode, for the UI banner and /mode confirmation.
+func (a *Agent) Mode() mode.Mode { return a.mode }
+
+// applyMode sets the active mode and recomputes the derived state: the tool
+// exposure filter and the system prompt (which depends on the filtered tool
+// names and the mode's bundled skills).
+func (a *Agent) applyMode(m mode.Mode) {
+	a.mode = m
+	a.activeTool = a.modeFilter(m)
+	a.system = SystemPrompt(m, mode.PromptInput{
+		Workdir:       a.workdir,
+		ToolNames:     a.exposedToolNames(),
+		MaturityLevel: a.maturity,
+	}, a.skills.ByIDs(m.Skills), a.opCtx)
+}
+
+// modeFilter derives the tool exposure predicate for a mode. The "skill" tool is
+// exposed exactly when the mode bundles skills; MCP evidence tools are always
+// exposed; otherwise the mode's policy decides (a nil policy exposes everything).
+// The filter is never nil, so the agent always enforces it.
+func (a *Agent) modeFilter(m mode.Mode) func(tool.Tool) bool {
+	hasSkills := len(m.Skills) > 0
+	policy := m.ToolPolicy
+	return func(t tool.Tool) bool {
+		switch {
+		case t.Name() == "skill":
+			return hasSkills
+		case a.evidence[t.Name()]:
+			return true
+		case policy == nil:
+			return true
+		default:
+			return policy(t)
+		}
+	}
+}
+
+// exposedToolNames lists the registered tool names the active filter exposes, in
+// the registry's stable (name-sorted) order — the list shown in the prompt.
+func (a *Agent) exposedToolNames() []string {
+	names := make([]string, 0)
+	for _, t := range a.registry.All() {
+		if a.activeTool == nil || a.activeTool(t) {
+			names = append(names, t.Name())
+		}
+	}
+	return names
+}
 
 // Connected reports whether a model provider is wired up.
 func (a *Agent) Connected() bool { return a.llm != nil }
@@ -109,7 +193,7 @@ func (a *Agent) Run(ctx context.Context, history []llm.Message, userInput string
 	decide := func(block llm.Block, summary string, t tool.Tool) (bool, string) {
 		return a.gate.Allow(block.Name, summary, t.ReadOnly()), "Operator denied permission to run this tool."
 	}
-	return a.loop(ctx, messages, a.system, a.registry.ToolDefs(), decide, a.maxSteps, ev)
+	return a.loop(ctx, messages, a.system, a.registry.ToolDefsFiltered(a.activeTool), decide, a.maxSteps, ev)
 }
 
 // decideFunc decides whether a tool call may run, returning the denial message
@@ -157,6 +241,14 @@ func (a *Agent) runToolUse(ctx context.Context, block llm.Block, decide decideFu
 	t, ok := a.registry.Get(block.Name)
 	if !ok {
 		msg := "unknown tool: " + block.Name
+		ev.toolResult(block.Name, msg, true)
+		return llm.ToolResultBlock(block.ID, msg, true)
+	}
+
+	// Enforce the mode's tool exposure: a tool hidden from the model in this mode
+	// must not run even if the model names it directly.
+	if a.activeTool != nil && !a.activeTool(t) {
+		msg := "tool not available in " + a.mode.ID + " mode: " + block.Name
 		ev.toolResult(block.Name, msg, true)
 		return llm.ToolResultBlock(block.ID, msg, true)
 	}

@@ -61,13 +61,14 @@ Fire up the session and start talking:
 vala
 ```
 
-That's the whole surface — one interactive session. Three slash commands steer
+That's the whole surface — one interactive session. A few slash commands steer
 the conversation itself:
 
 | Command | What it does |
 | --- | --- |
 | `/help` | List the commands. |
 | `/connect [provider]` | Choose or switch the model provider mid-session; lists providers when bare. |
+| `/mode [id]` | List modes, or switch the active specialization live; lists modes when bare. |
 | `/clear` | Wipe the context and transcript, keep the banner. |
 | `/compact [focus]` | Summarize the session into a tight recap and keep going; `focus` steers it. |
 
@@ -78,7 +79,7 @@ vala run "validate and test every rule in my detections directory, report failur
 ```
 
 > [!TIP]
-> Common flags: `--model <id>`, `--permission ask|allow|deny`, `--yes`.
+> Common flags: `--model <id>`, `--permission ask|allow|deny`, `--mode hunt|detect`, `--yes`.
 > vala also auto-compacts as a turn approaches the context window (80% by
 > default) so long sessions never run out of room — tune it with
 > `context_window` / `auto_compact_threshold`, or set either to `0` to turn it off.
@@ -177,6 +178,28 @@ Unlike query results and file contents — which vala treats as untrusted data �
 both VALA.md and team memory are operator-authored, so vala trusts them as
 guidance.
 
+## Modes & skills
+
+vala runs in a **mode** — a specialization that swaps the system prompt, the
+tools the agent sees, and a set of bundled **skills**. Think of it as the same
+agent and toolbox, focused for the job at hand:
+
+| Mode | What it's for |
+| --- | --- |
+| `hunt` *(default)* | The full eight-stage hunt loop below: hypothesis → evidence → verdict → detection. |
+| `detect` | Detection Engineering — author, refine, and test Sigma rules directly, without running a full hunt. Drops the hunt-lifecycle tools, centers the detection toolkit, and bundles the `sigma-authoring` skill. |
+
+Pick a mode at startup (`--mode detect`, `VALA_MODE=detect`, or `"mode": "detect"`
+in config) or switch live with `/mode detect`; the conversation carries over.
+
+**Skills** are Claude-Code-style capability packs — a `SKILL.md` (frontmatter +
+markdown) that a mode bundles. The system prompt lists each active skill by name
+and one-line description; the agent loads the full body on demand with the
+`skill` tool (progressive disclosure, so long playbooks cost tokens only when
+needed). Drop your own in `.vala/skills/<name>/SKILL.md` (project) or
+`~/.config/vala/skills/` (user); a project skill overrides a built-in of the same
+name. See [`docs/SPEC-0014`](docs/SPEC-0014-modes-and-skills.md).
+
 ## The hunt loop
 
 vala runs a single eight-stage loop, shaped after the frameworks every hunt team
@@ -265,6 +288,7 @@ provider's own key env such as `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`).
 {
   "provider": "anthropic",
   "model": "claude-opus-4-8",
+  "mode": "hunt",
   "permission": "ask",
   "detections_dir": "detections",
   "context_window": 200000,

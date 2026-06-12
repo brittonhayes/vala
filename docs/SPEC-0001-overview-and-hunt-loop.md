@@ -54,6 +54,11 @@ specs (see the [index](README.md)).
   **Inconclusive**.
 - **Maturity (HMM)** — the Hunting Maturity Model level (0–4) the harness runs
   at; an autonomy dial, not a behavioral mode (see [SPEC-0013](SPEC-0013-maturity-and-autonomy.md)).
+- **Mode** — a selectable specialization the harness runs in: a system prompt, an
+  exposed tool subset, and a set of bundled skills. **hunt** (this spec) is the
+  default and reproduces the classic full loop; **detect** focuses on detection
+  authoring. Modes are behavioral (they change what the agent does), distinct
+  from maturity, which only tunes autonomy. See [SPEC-0014](SPEC-0014-modes-and-skills.md).
 
 ## 3. Requirements
 
@@ -62,15 +67,23 @@ specs (see the [index](README.md)).
 - **R-0001-01** vala MUST ship as a single binary with no external detection
   toolchain: Sigma rules are validated and unit-tested offline, inside the
   binary (see [SPEC-0005](SPEC-0005-detection-engine.md)).
-- **R-0001-02** vala MUST present **one** capability — hunting — not a menu of
-  co-equal modes. Detection authoring MUST be framed as the *convert* stage of a
-  hunt (tiers 1–2 of the output hierarchy), never as a standalone mode or
-  command.
+- **R-0001-02** **hunt** MUST be the default mode and the harness's center of
+  gravity: within it, detection authoring is framed as the *convert* stage of a
+  hunt (tiers 1–2 of the output hierarchy), not a co-equal activity. Additional
+  modes (e.g. **detect**) are focused specializations layered on the same agent,
+  toolbox, and brain, defined in [SPEC-0014](SPEC-0014-modes-and-skills.md) — not
+  a menu of unrelated products.
+  > Historical note: this requirement previously asserted vala presents *one*
+  > capability with *no* modes. Modes were introduced intentionally (SPEC-0014);
+  > hunt preserves the original behavior byte-for-byte as the default.
 - **R-0001-03** vala MUST NOT include an alert/incident-response runtime. It is a
   hunting tool; responding to alerts is out of scope (see §6).
-- **R-0001-04** The agent MUST operate purely by composing tools — there are no
-  modes or slash-commands that change agent behavior. The only commands are the
-  REPL session commands of [SPEC-0010](SPEC-0010-cli.md).
+- **R-0001-04** **Within a mode**, the agent MUST operate purely by composing the
+  tools that mode exposes — there are no per-turn sub-modes or behavior-changing
+  slash-commands beyond mode selection itself. Mode selection (`/mode`, `--mode`,
+  `VALA_MODE`, the `mode` config key) is the one behavioral switch; the only other
+  commands are the REPL session commands of [SPEC-0010](SPEC-0010-cli.md). Modes
+  are specified in [SPEC-0014](SPEC-0014-modes-and-skills.md).
 
 ### The loop
 
@@ -117,9 +130,11 @@ specs (see the [index](README.md)).
   environment's stack and assets.
 - **R-0001-14** **Maturity tunes autonomy, not behavior** — the maturity level
   MUST only set the default permission mode and the prompt's gating framing (see
-  [SPEC-0013](SPEC-0013-maturity-and-autonomy.md)). It MUST NOT add commands,
-  tools, or behavioral modes; the loop and toolset are identical at every level
-  (preserving R-0001-04).
+  [SPEC-0013](SPEC-0013-maturity-and-autonomy.md)). It MUST NOT add commands or
+  tools, and MUST NOT itself act as a behavioral mode; within a given mode the
+  loop and toolset are identical at every maturity level. (Behavioral
+  specialization is the job of modes, R-0001-02 and [SPEC-0014](SPEC-0014-modes-and-skills.md);
+  maturity is orthogonal to it.)
 
 ## 4. Behavior & interfaces
 

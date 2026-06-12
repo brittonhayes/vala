@@ -68,10 +68,13 @@ top of both.
     genuinely destructive or outward-facing actions, and sample its own work so
     the operator can spot-check.
 - **R-0013-05** Maturity MUST be an autonomy dial only: it MUST NOT add or remove
-  commands, tools, or behavioral modes. The loop, the tools, and the lint gates
-  are identical at every level; only the default permission mode and the prompt
-  framing change. This preserves [SPEC-0001](SPEC-0001-overview-and-hunt-loop.md)
-  R-0001-04 (no modes).
+  commands or tools, and MUST NOT itself select a behavioral mode. Within a given
+  mode the loop, the tools, and the lint gates are identical at every level; only
+  the default permission mode and the prompt framing change. Maturity is
+  orthogonal to modes ([SPEC-0014](SPEC-0014-modes-and-skills.md)): a mode chooses
+  *what* the agent does, maturity chooses *how much* it does before pausing. This
+  preserves the intent of [SPEC-0001](SPEC-0001-overview-and-hunt-loop.md)
+  R-0001-04 — maturity adds no behavior of its own.
 
 ## 4. Behavior & interfaces
 
@@ -156,7 +159,8 @@ middle, autonomous operation at HMM3–4 — without changing what vala *is*.
 
 - [SPEC-0009](SPEC-0009-configuration.md) — config schema and layering.
 - [SPEC-0011](SPEC-0011-permissions-and-safety.md) — the permission gate.
-- [SPEC-0001](SPEC-0001-overview-and-hunt-loop.md) R-0001-04, R-0001-14 — no modes.
+- [SPEC-0001](SPEC-0001-overview-and-hunt-loop.md) R-0001-04, R-0001-14 — modes vs. autonomy.
+- [SPEC-0014](SPEC-0014-modes-and-skills.md) — modes and skills (orthogonal to maturity).
 - [The Cyber Hunting Maturity Model — Sqrrl](https://medium.com/@sqrrldata/the-cyber-hunting-maturity-model-6d506faa8ad5)
 - `internal/config/config.go` — `Maturity`, `MaturityPermission`, `Load`.
 - `internal/agent/prompt.go` — `maturityFraming`.

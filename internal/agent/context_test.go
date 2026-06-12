@@ -47,11 +47,11 @@ func TestLoadOperatorContextMergesGlobalThenProject(t *testing.T) {
 }
 
 func TestSystemPromptIncludesOperatorContext(t *testing.T) {
-	with := SystemPrompt("/work", []string{"read"}, 1, "CROWN JEWELS: billing db")
+	with := huntPrompt("/work", []string{"read"}, 1, "CROWN JEWELS: billing db")
 	if !strings.Contains(with, "Standing context") || !strings.Contains(with, "CROWN JEWELS: billing db") {
 		t.Fatalf("system prompt missing standing context section:\n%s", with)
 	}
-	if without := SystemPrompt("/work", []string{"read"}, 1, ""); strings.Contains(without, "Standing context") {
+	if without := huntPrompt("/work", []string{"read"}, 1, ""); strings.Contains(without, "Standing context") {
 		t.Fatalf("empty context should not add a section")
 	}
 }

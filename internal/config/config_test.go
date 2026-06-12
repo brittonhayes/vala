@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestDefaultCompactionSettings(t *testing.T) {
 	cfg := Default()
@@ -19,6 +23,37 @@ func TestDefaultProvider(t *testing.T) {
 	}
 	if cfg.Model != "claude-opus-4-8" {
 		t.Errorf("Model = %q, want claude-opus-4-8", cfg.Model)
+	}
+}
+
+func TestDefaultMode(t *testing.T) {
+	if cfg := Default(); cfg.Mode != "hunt" {
+		t.Errorf("Mode = %q, want hunt", cfg.Mode)
+	}
+}
+
+func TestLoadModeEnvOverride(t *testing.T) {
+	t.Setenv("VALA_MODE", "detect")
+	cfg, err := Load(t.TempDir())
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Mode != "detect" {
+		t.Errorf("Mode = %q, want detect", cfg.Mode)
+	}
+}
+
+func TestLoadModeProjectConfig(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".vala.json"), []byte(`{"mode":"detect"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Mode != "detect" {
+		t.Errorf("Mode = %q, want detect from project config", cfg.Mode)
 	}
 }
 

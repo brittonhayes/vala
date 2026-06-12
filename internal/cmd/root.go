@@ -13,8 +13,10 @@ import (
 	"github.com/brittonhayes/vala/internal/config"
 	"github.com/brittonhayes/vala/internal/llm"
 	"github.com/brittonhayes/vala/internal/mcp"
+	"github.com/brittonhayes/vala/internal/mode"
 	"github.com/brittonhayes/vala/internal/permission"
 	"github.com/brittonhayes/vala/internal/session"
+	"github.com/brittonhayes/vala/internal/skills"
 	"github.com/brittonhayes/vala/internal/tool"
 	"github.com/brittonhayes/vala/internal/tools"
 	"github.com/brittonhayes/vala/internal/ui"
@@ -26,6 +28,7 @@ import (
 var (
 	flagModel      string
 	flagPermission string
+	flagMode       string
 )
 
 // rootCmd starts the interactive REPL by default.
@@ -75,7 +78,7 @@ single non-interactive task.`,
 			fmt.Fprintln(os.Stderr, "warning: transcript disabled:", err)
 		}
 		ag := agent.New(built.client, built.registry, built.gate, built.cwd, built.cfg.MaxSteps, built.cfg.Maturity,
-			sessionContext(cmd.Context(), built.cwd, built.rc.Brain))
+			sessionContext(cmd.Context(), built.cwd, built.rc.Brain), built.session())
 		repl := ui.New(ag, built.gate, sess, modelLabel(built.client), contextWindow(built.client, built.cfg), built.cfg.AutoCompactThreshold)
 		repl.Evidence = built.evidence
 		// Wire /connect: rebuild a provider from the latest stored credentials so
@@ -98,6 +101,7 @@ func Execute() {
 func init() {
 	rootCmd.PersistentFlags().StringVar(&flagModel, "model", "", "Anthropic model ID (overrides config)")
 	rootCmd.PersistentFlags().StringVar(&flagPermission, "permission", "", "permission mode: ask | allow | deny")
+	rootCmd.PersistentFlags().StringVar(&flagMode, "mode", "", "specialization: hunt | detect")
 	rootCmd.PersistentFlags().BoolVar(&flagNoInitPrompt, "no-init-prompt", false, "suppress the first-run notice when no Notion brain is configured")
 	rootCmd.PersistentFlags().BoolVar(&flagRequireBrain, "require-brain", false, "fail instead of falling back to the ephemeral in-memory brain")
 	rootCmd.AddCommand(runCmd, versionCmd)
@@ -111,6 +115,12 @@ type built struct {
 	registry *tool.Registry
 	gate     *permission.Gate
 	rc       *tools.RunContext
+	// mode is the resolved specialization the agent starts in; skills is the
+	// discovered skill catalog; evidenceNames are the MCP evidence tool names the
+	// agent keeps exposed in every mode.
+	mode          mode.Mode
+	skills        *skills.Set
+	evidenceNames []string
 	// evidence reports how each configured MCP source connected, so the session
 	// can show the operator what is (and is not) available to hunt in.
 	evidence []mcp.EvidenceStatus
@@ -138,6 +148,9 @@ func resolveConfig() (config.Config, string, error) {
 	if flagPermission != "" {
 		cfg.Permission = flagPermission
 	}
+	if flagMode != "" {
+		cfg.Mode = flagMode
+	}
 	return cfg, cwd, nil
 }
 
@@ -163,17 +176,44 @@ func build() (*built, error) {
 	}
 	gate := permission.New(permission.Parse(cfg.Permission), cfg.Allowlist)
 
+	// Resolve the active mode up front so an unknown id fails clearly rather than
+	// silently falling back.
+	m, ok := mode.Get(cfg.Mode)
+	if !ok {
+		return nil, fmt.Errorf("unknown mode %q (valid: %s)", cfg.Mode, mode.IDs())
+	}
+
+	// Discover skills (builtin + user + project). Best-effort: warnings are
+	// surfaced on stderr but never block the session.
+	sk, warnings := skills.Load(cwd)
+	for _, w := range warnings {
+		fmt.Fprintln(os.Stderr, "warning: skill:", w)
+	}
+
 	// Connect configured MCP servers (e.g. Scanner) and discover their evidence
 	// tools so they show up during a hunt.
 	evidence, evidenceStatus := connectMCP(cfg)
+	evidenceNames := make([]string, 0, len(evidence))
+	for _, t := range evidence {
+		evidenceNames = append(evidenceNames, t.Name())
+	}
 
 	// The session RunContext the hunt/intel tools write through. open_hunt sets
 	// its active hunt at runtime; Author stamps shared memories with this operator.
 	rc := tools.NewRunContext(brain.New(brainStore(cfg, cwd)))
 	rc.Author = resolveAuthor()
-	registry := tools.Toolbox(cwd, rc, evidence...)
+	registry := tools.Toolbox(cwd, rc, sk, evidence...)
 
-	return &built{cfg: cfg, cwd: cwd, client: client, registry: registry, gate: gate, rc: rc, evidence: evidenceStatus, connectErr: connectErr}, nil
+	return &built{
+		cfg: cfg, cwd: cwd, client: client, registry: registry, gate: gate, rc: rc,
+		mode: m, skills: sk, evidenceNames: evidenceNames,
+		evidence: evidenceStatus, connectErr: connectErr,
+	}, nil
+}
+
+// session bundles a built's specialization into the agent's Session input.
+func (b *built) session() agent.Session {
+	return agent.Session{Mode: b.mode, Skills: b.skills, EvidenceNames: b.evidenceNames}
 }
 
 // modelLabel renders the active provider and model for the session banner,

@@ -109,6 +109,7 @@ specs that consume them (model/compaction to
 | `provider` | string | `anthropic` | `VALA_PROVIDER` | SPEC-0008 |
 | `providers` | map[string]ProviderConfig | empty | — | SPEC-0008 |
 | `model` | string | `claude-opus-4-8` | `VALA_MODEL` | SPEC-0008 |
+| `mode` | string | `hunt` | `VALA_MODE` | SPEC-0014 |
 | `max_tokens` | int64 | `8192` | — | SPEC-0008 |
 | `permission` | string | `""` (derived from `maturity`) | `VALA_PERMISSION` | SPEC-0011 |
 | `maturity` | int | `1` | `VALA_MATURITY` | SPEC-0013 |
@@ -128,6 +129,7 @@ specs that consume them (model/compaction to
 | `<provider>_API_KEY` | the active provider's key (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`); never persisted, takes precedence over the credential store |
 | `VALA_PROVIDER` | override `provider` |
 | `VALA_MODEL` | override `model` |
+| `VALA_MODE` | override `mode` (`hunt`/`detect`); validated at startup (see SPEC-0014) |
 | `VALA_PERMISSION` | override `permission` (`ask`/`allow`/`deny`); wins over the maturity-derived default |
 | `VALA_MATURITY` | override `maturity` (int 0–4; malformed ignored); sets the default `permission` when none is set explicitly |
 | `VALA_CONTEXT_WINDOW` | override `context_window` (int; malformed ignored) |

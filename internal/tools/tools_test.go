@@ -109,7 +109,7 @@ func TestReadOnlyFlags(t *testing.T) {
 	readOnly := map[string]bool{
 		"read": true, "ls": true, "glob": true, "grep": true,
 		"validate_detection": true, "reference_detection": true, "test_detection": true,
-		"recall": true,
+		"recall": true, "skill": true,
 	}
 	notReadOnly := map[string]bool{
 		"bash": true, "write": true, "edit": true, "ntn": true,
@@ -117,7 +117,7 @@ func TestReadOnlyFlags(t *testing.T) {
 		"edit_detection_logic": true, "manage_detection_list": true,
 		"set_detection_runbook": true, "manage_detection_tests": true,
 	}
-	for _, tl := range Toolbox(t.TempDir(), nil).All() {
+	for _, tl := range Toolbox(t.TempDir(), nil, nil).All() {
 		if readOnly[tl.Name()] && !tl.ReadOnly() {
 			t.Errorf("%s should be read-only", tl.Name())
 		}

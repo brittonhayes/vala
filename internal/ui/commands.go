@@ -7,6 +7,7 @@ import (
 
 	"github.com/brittonhayes/vala/internal/auth"
 	"github.com/brittonhayes/vala/internal/llm"
+	"github.com/brittonhayes/vala/internal/mode"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -23,6 +24,7 @@ func (m chatModel) commands() []slashCommand {
 	return []slashCommand{
 		{"help", "list available commands", chatModel.cmdHelp},
 		{"connect", "choose or switch the LLM provider; /connect <provider> [key]", chatModel.cmdConnect},
+		{"mode", "list specializations; /mode <name> switches the active mode live", chatModel.cmdMode},
 		{"clear", "clear the conversation and transcript (keep the banner)", chatModel.cmdClear},
 		{"compact", "summarize the conversation to reclaim context; optional focus text", chatModel.cmdCompact},
 	}
@@ -185,6 +187,57 @@ func storeInlineCredential(info llm.ProviderInfo, secret string) error {
 		cred.Access, cred.Refresh, cred.Expiry = "", "", 0
 	}
 	return store.Set(info.ID, cred)
+}
+
+// cmdMode lists the available specializations or switches the active one live.
+// With no arguments it prints every mode and marks the active one; with a mode
+// id it swaps the agent's mode in place — recomputing the system prompt and the
+// exposed tool set — without losing the conversation, mirroring /connect. The
+// switch is blocked mid-turn so the running loop's tool set stays consistent.
+func (m chatModel) cmdMode(args string) (tea.Model, tea.Cmd) {
+	if m.repl.Agent == nil {
+		m.append("  " + m.styles.Error.Render("no agent in this session"))
+		return m, nil
+	}
+	name := strings.TrimSpace(args)
+	if name == "" {
+		m.append(m.modeList())
+		return m, nil
+	}
+	if m.running {
+		m.append("  " + m.styles.Error.Render("busy") + "  " + m.styles.Hint.Render("wait for the current turn before switching modes"))
+		return m, nil
+	}
+	mm, ok := mode.Get(name)
+	if !ok {
+		m.append("  " + m.styles.Error.Render("unknown mode: "+name) + "  " + m.styles.Hint.Render("valid: "+mode.IDs()))
+		return m, nil
+	}
+	m.repl.Agent.SetMode(mm)
+	note := mm.Title
+	if len(mm.Skills) > 0 {
+		note += "  ·  skills: " + strings.Join(mm.Skills, ", ")
+	}
+	m.append("  " + m.styles.BannerTag.Render("mode") + "  " +
+		m.styles.ToolCall.Render(mm.ID) + "  " + m.styles.Hint.Render(note))
+	return m, nil
+}
+
+// modeList renders the mode picker shown by a bare /mode, marking the active one.
+func (m chatModel) modeList() string {
+	active := m.repl.Agent.Mode().ID
+	var b strings.Builder
+	b.WriteString("  " + m.styles.BannerTag.Render("modes") + "\n")
+	for _, md := range mode.All() {
+		mark := " "
+		if md.ID == active {
+			mark = "✓"
+		}
+		b.WriteString(fmt.Sprintf("  %s %s  %s\n",
+			m.styles.ToolGlyph.Render(mark), m.styles.ToolCall.Render(md.ID), m.styles.Hint.Render(md.Description)))
+	}
+	b.WriteString("  " + m.styles.Hint.Render("switch: /mode <name>"))
+	return strings.TrimRight(b.String(), "\n")
 }
 
 func (m chatModel) cmdClear(_ string) (tea.Model, tea.Cmd) {

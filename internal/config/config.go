@@ -31,6 +31,11 @@ type Config struct {
 	// "derive from Maturity" (see MaturityPermission): the maturity level sets the
 	// default autonomy, and an explicit permission (config, env, or flag) wins.
 	Permission string `json:"permission"`
+	// Mode is the active specialization id the harness runs in: a built-in
+	// ("hunt", "detect"). Empty defaults to "hunt", which reproduces the classic
+	// full hunt-loop behavior. Unlike Maturity (autonomy), Mode is behavioral: it
+	// selects the system prompt, the exposed tool subset, and the bundled skills.
+	Mode string `json:"mode"`
 	// Maturity is the Hunting Maturity Model level (0–4) the harness runs at. It
 	// tunes autonomy: it sets the default permission mode and frames the agent's
 	// gating in the system prompt. It is NOT a behavioral mode — the loop and
@@ -133,6 +138,7 @@ func Default() Config {
 	return Config{
 		Provider:      "anthropic",
 		Model:         "claude-opus-4-8",
+		Mode:          "hunt",
 		MaxTokens:     8192,
 		Permission:    "", // derived from Maturity unless set explicitly
 		Maturity:      1,  // minimal: ask before writes
@@ -182,6 +188,9 @@ func Load(cwd string) (Config, error) {
 	}
 	if v := os.Getenv("VALA_PERMISSION"); v != "" {
 		cfg.Permission = v
+	}
+	if v := os.Getenv("VALA_MODE"); v != "" {
+		cfg.Mode = v
 	}
 	if v := os.Getenv("VALA_MATURITY"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {

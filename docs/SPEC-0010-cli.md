@@ -65,8 +65,10 @@ permission gate ([SPEC-0011](SPEC-0011-permissions-and-safety.md)).
 ### Flags
 
 - **R-0010-05** `--model <id>` MUST override the config `model`; `--permission
-  <mode>` MUST override the config `permission`; an empty flag value MUST leave
-  the config value in place.
+  <mode>` MUST override the config `permission`; `--mode <id>` MUST override the
+  config `mode` (`hunt`/`detect`; see [SPEC-0014](SPEC-0014-modes-and-skills.md));
+  an empty flag value MUST leave the config value in place. An unknown `--mode`
+  MUST fail with an error listing the valid ids.
 - **R-0010-06** `vala run` MUST default to denying non-read-only tools and MUST
   auto-approve all calls when `--yes` is given (equivalent to permission
   `allow`).
@@ -118,6 +120,7 @@ permission gate ([SPEC-0011](SPEC-0011-permissions-and-safety.md)).
 |---|---|
 | `--model <id>` | override `model` |
 | `--permission <ask\|allow\|deny>` | override `permission` |
+| `--mode <hunt\|detect>` | override `mode` (SPEC-0014) |
 | `--no-init-prompt` | suppress first-run notice |
 | `--require-brain` | fail if no Notion brain configured |
 
@@ -135,6 +138,7 @@ brain is configured, else `Mem`.
 |---|---|
 | `/help` | list the commands |
 | `/connect [provider]` | list providers, or switch the active provider live (optionally storing an inline credential) |
+| `/mode [id]` | list modes, or switch the active mode live (SPEC-0014) |
 | `/clear` | wipe context and transcript, keep the banner |
 | `/compact [focus]` | summarize the session and continue; `focus` steers the summary |
 
