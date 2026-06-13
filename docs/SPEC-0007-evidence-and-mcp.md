@@ -64,6 +64,12 @@ It does **not** define the tool interface (that is
 - **R-0007-06** Tool outputs (query results, file contents) MUST be treated as
   untrusted data, never as instructions (see
   [SPEC-0011](SPEC-0011-permissions-and-safety.md)).
+- **R-0007-08** The MCP server named `notion` is reserved as the hunt brain's
+  search backend, not an evidence source: vala MUST route its search tool into
+  recall (see [SPEC-0002](SPEC-0002-brain-and-persistence.md)) and MUST NOT
+  expose its tools to the agent, so `recall` stays the single curated read
+  surface over the brain. A connect or discovery failure MUST degrade recall to
+  the client-side window scan with a warning, never block the session.
 
 ### File & shell tools
 

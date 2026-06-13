@@ -68,6 +68,14 @@ func (t *Recall) Run(ctx context.Context, input json.RawMessage) (tool.Result, e
 		in.Limit = 5
 	}
 
+	// With a search backend (e.g. a Notion MCP server) recall is one
+	// relevance-ranked, full-text search over the brain rather than a
+	// per-database scan, so a single call replaces the scope loop. An empty query
+	// still uses the loop below — it means "list the most recent" per scope.
+	if in.Query != "" && t.RC.Brain.HasSearch() {
+		return t.runSearch(ctx, in.Scope, in.Query, in.Limit)
+	}
+
 	var b strings.Builder
 	total := 0
 	for _, s := range recallScopes {
@@ -103,7 +111,52 @@ func (t *Recall) Run(ctx context.Context, input json.RawMessage) (tool.Result, e
 	return tool.Text(strings.TrimSpace(b.String())), nil
 }
 
-// summarizeRow renders the salient fields of a brain row as a compact line.
+// runSearch answers recall through the brain's search backend in a single call.
+// Scope picks the logical database to search (empty for the whole brain); the
+// loose, relevance-ranked rows are rendered with a generic summarizer since a
+// search backend returns titles/snippets rather than schema-shaped props.
+func (t *Recall) runSearch(ctx context.Context, scope, query string, limit int) (tool.Result, error) {
+	db := ""
+	if scope != "all" {
+		db = scopeDB(scope)
+	}
+	rows, err := t.RC.Brain.Recall(ctx, db, query, limit)
+	if err != nil {
+		return tool.Errorf("recall search failed: %v", err), nil
+	}
+	if len(rows) == 0 {
+		subject := scope
+		if subject == "all" {
+			subject = "artifacts"
+		}
+		return tool.Text(fmt.Sprintf("No prior %s match %q — this looks like new ground.", subject, query)), nil
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "## %s (%d)\n", scope, len(rows))
+	for _, r := range rows {
+		line := summarizeSearch(r)
+		if r.ID != "" {
+			fmt.Fprintf(&b, "- %s — %s\n", r.ID, line)
+		} else {
+			fmt.Fprintf(&b, "- %s\n", line)
+		}
+	}
+	return tool.Text(strings.TrimSpace(b.String())), nil
+}
+
+// scopeDB maps a recall scope name to its brain database (empty if unknown).
+func scopeDB(scope string) string {
+	for _, s := range recallScopes {
+		if s.name == scope {
+			return s.db
+		}
+	}
+	return ""
+}
+
+// summarizeRow renders the salient fields of a brain row as a compact line. When
+// none of the scope's typed fields are present (e.g. a loose search result) it
+// falls back to the generic title/snippet/url shape a search backend returns.
 func summarizeRow(r brain.Row, fields []string) string {
 	parts := make([]string, 0, len(fields))
 	for _, f := range fields {
@@ -114,7 +167,39 @@ func summarizeRow(r brain.Row, fields []string) string {
 		}
 	}
 	if len(parts) == 0 {
-		return "(no summary fields)"
+		return summarizeSearch(r)
 	}
 	return strings.Join(parts, " · ")
+}
+
+// summarizeSearch renders a loose search row: a title (or any text), trimmed to
+// a single readable line, with a URL appended when present.
+func summarizeSearch(r brain.Row) string {
+	var lead string
+	for _, f := range []string{"title", "name", "snippet", "preview", "text"} {
+		if v, ok := r.Props[f]; ok {
+			if s := strings.TrimSpace(fmt.Sprint(v)); s != "" {
+				lead = oneLine(s, 160)
+				break
+			}
+		}
+	}
+	if lead == "" {
+		return "(no summary)"
+	}
+	if v, ok := r.Props["url"]; ok {
+		if u := strings.TrimSpace(fmt.Sprint(v)); u != "" {
+			return lead + " — " + u
+		}
+	}
+	return lead
+}
+
+// oneLine collapses whitespace and truncates to max runes for a compact line.
+func oneLine(s string, max int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > max {
+		return string(r[:max]) + "…"
+	}
+	return s
 }

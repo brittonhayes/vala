@@ -200,7 +200,9 @@ func build() (*built, error) {
 
 	// The session RunContext the hunt/intel tools write through. open_hunt sets
 	// its active hunt at runtime; Author stamps shared memories with this operator.
-	rc := tools.NewRunContext(brain.New(brainStore(cfg, cwd)))
+	store := brainStore(cfg, cwd)
+	connectBrainSearch(cfg, store)
+	rc := tools.NewRunContext(brain.New(store))
 	rc.Author = resolveAuthor()
 	registry := tools.Toolbox(cwd, rc, sk, evidence...)
 
@@ -281,11 +283,45 @@ func connectMCP(cfg config.Config) ([]tool.Tool, []mcp.EvidenceStatus) {
 	var evidence []tool.Tool
 	var report []mcp.EvidenceStatus
 	for _, srv := range cfg.MCP {
+		// The Notion search server is wired into recall (connectBrainSearch), not
+		// exposed as a freelance evidence tool — recall stays the single curated
+		// read surface over the brain.
+		if cfg.IsNotionSearchServer(srv) {
+			continue
+		}
 		ts, status := tools.ConnectEvidence(context.Background(), serverConfig(srv))
 		evidence = append(evidence, ts...)
 		report = append(report, status)
 	}
 	return evidence, report
+}
+
+// connectBrainSearch routes a configured Notion MCP server's search tool into
+// the brain's recall path, so recall uses Notion's relevance-ranked, full-text
+// search instead of the client-side window scan. It is best-effort: a missing
+// server, a non-NTN brain, or a connect/discovery failure leaves recall on the
+// window scan with a warning rather than blocking the session.
+func connectBrainSearch(cfg config.Config, store brain.Notion) {
+	srv, ok := cfg.NotionSearchServer()
+	if !ok {
+		return
+	}
+	ntn, ok := store.(*brain.NTN)
+	if !ok {
+		return
+	}
+	sess, err := mcp.Connect(context.Background(), serverConfig(srv))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "⚠ notion search unavailable: %v — recall will use the window scan\n", err)
+		return
+	}
+	hook, err := tools.NotionSearchHook(context.Background(), sess)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "⚠ notion search unavailable: %v — recall will use the window scan\n", err)
+		_ = sess.Close()
+		return
+	}
+	ntn.SearchFn = hook
 }
 
 // serverConfig maps a persisted MCP server entry to the mcp package's transport

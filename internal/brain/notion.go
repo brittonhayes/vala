@@ -161,6 +161,13 @@ type NTN struct {
 	Dir string
 	DBs DBIDs // data-source IDs from config
 
+	// SearchFn, when set, answers Recall with the Notion backend's own
+	// relevance-ranked search (e.g. a Notion MCP server's search tool) instead
+	// of the client-side window scan in Query. It is injected by the caller so
+	// the brain package stays free of any MCP/transport dependency. db is the
+	// logical database recall is scoped to (empty for the whole brain).
+	SearchFn func(ctx context.Context, db, query string, limit int) ([]Row, error)
+
 	mu      sync.Mutex
 	schemas map[string]map[string]string // data-source ID -> (property name -> type)
 }

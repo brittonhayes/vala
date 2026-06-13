@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/brittonhayes/vala/internal/brain"
 )
@@ -248,6 +249,29 @@ func hasMCPServer(servers []MCPServer, name string) bool {
 		}
 	}
 	return false
+}
+
+// NotionSearchServerName is the conventional MCP server name vala treats as the
+// hunt brain's search backend rather than an evidence source: its search tool
+// powers recall, and it is deliberately NOT exposed to the agent as a freelance
+// tool so recall stays the single curated read surface over the brain.
+const NotionSearchServerName = "notion"
+
+// NotionSearchServer returns the configured MCP server that backs brain search
+// (the one named "notion"), if any.
+func (c Config) NotionSearchServer() (MCPServer, bool) {
+	for _, s := range c.MCP {
+		if strings.EqualFold(s.Name, NotionSearchServerName) {
+			return s, true
+		}
+	}
+	return MCPServer{}, false
+}
+
+// IsNotionSearchServer reports whether srv is the brain's search backend, so the
+// evidence-connection path can skip it (it is wired into recall instead).
+func (c Config) IsNotionSearchServer(srv MCPServer) bool {
+	return strings.EqualFold(srv.Name, NotionSearchServerName)
 }
 
 // mergeFile overlays a JSON config file onto cfg if the file exists. A missing
