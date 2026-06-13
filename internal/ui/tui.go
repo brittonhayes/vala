@@ -736,7 +736,6 @@ func (m chatModel) banner() string {
 	if line := m.evidenceLine(); line != "" {
 		b.WriteString("\n  " + line)
 	}
-	b.WriteString("\n  " + m.styles.Rule.Render(strings.Repeat("─", 52)))
 	return b.String()
 }
 
