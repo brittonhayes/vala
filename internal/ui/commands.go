@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/brittonhayes/vala/internal/auth"
@@ -48,6 +49,69 @@ func (m chatModel) dispatchSlash(input string) (tea.Model, tea.Cmd, bool) {
 	}
 	m.append("  " + m.styles.Error.Render("unknown command: /"+name) + "  " + m.styles.Hint.Render("try /help"))
 	return m, nil, true
+}
+
+// matchCommands fuzzy-filters the command registry against a query typed after
+// the leading slash, ranking matches so the most relevant command sorts first.
+// Name matches outrank description matches, and exact/prefix hits outrank looser
+// subsequence ones. An empty query returns every command in registry order so the
+// menu doubles as a full command list the moment "/" is typed.
+func matchCommands(cmds []slashCommand, query string) []slashCommand {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return cmds
+	}
+	type scored struct {
+		cmd   slashCommand
+		score int
+	}
+	var matched []scored
+	for _, c := range cmds {
+		if s, ok := scoreCommand(c, query); ok {
+			matched = append(matched, scored{c, s})
+		}
+	}
+	// Stable so commands with equal scores keep their registry order.
+	sort.SliceStable(matched, func(i, j int) bool { return matched[i].score > matched[j].score })
+	out := make([]slashCommand, len(matched))
+	for i, mm := range matched {
+		out[i] = mm.cmd
+	}
+	return out
+}
+
+// scoreCommand ranks one command against a lowercased query, reporting whether it
+// matches at all. Higher is better: an exact name beats a name prefix beats a name
+// subsequence beats a description substring beats a description subsequence.
+func scoreCommand(c slashCommand, query string) (int, bool) {
+	name := strings.ToLower(c.name)
+	desc := strings.ToLower(c.desc)
+	switch {
+	case name == query:
+		return 100, true
+	case strings.HasPrefix(name, query):
+		return 80, true
+	case subsequence(query, name):
+		return 60, true
+	case strings.Contains(desc, query):
+		return 40, true
+	case subsequence(query, desc):
+		return 20, true
+	}
+	return 0, false
+}
+
+// subsequence reports whether every byte of query appears in target in order
+// (not necessarily contiguously) — the classic fuzzy-find test, so typing "cmt"
+// still finds "compact".
+func subsequence(query, target string) bool {
+	qi := 0
+	for i := 0; i < len(target) && qi < len(query); i++ {
+		if target[i] == query[qi] {
+			qi++
+		}
+	}
+	return qi == len(query)
 }
 
 // splitCommand separates the first whitespace-delimited token (the command name)

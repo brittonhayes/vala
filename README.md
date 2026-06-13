@@ -72,6 +72,10 @@ the conversation itself:
 | `/clear` | Wipe the context and transcript, keep the banner. |
 | `/compact [focus]` | Summarize the session into a tight recap and keep going; `focus` steers it. |
 
+Type `/` and the commands appear inline — a fuzzy autocomplete that filters by
+name and description as you type, `↑`/`↓` to pick, `Tab` to fill in, `Enter` to
+run. No need to memorize them.
+
 Need a one-shot for CI or a cron? Same toolbox, no TTY:
 
 ```sh

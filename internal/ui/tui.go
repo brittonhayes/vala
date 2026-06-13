@@ -85,7 +85,17 @@ type chatModel struct {
 	warnedTightBudget bool  // true once we've warned that overhead alone fills the window
 
 	perm *permMsg // pending permission request, nil when none
+
+	// Slash-command autocomplete: when the input is a bare "/foo" (no args yet),
+	// compMatches holds the fuzzy-ranked commands and compIdx the highlighted row.
+	compActive  bool
+	compMatches []slashCommand
+	compIdx     int
 }
+
+// maxCompletionRows caps how many command suggestions show at once so the menu
+// never crowds out the transcript.
+const maxCompletionRows = 8
 
 func newChatModel(r *REPL) chatModel {
 	ta := textarea.New()
@@ -218,6 +228,37 @@ func (m chatModel) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// The autocomplete menu captures navigation and selection keys while it is
+	// open; everything else (typing, backspace) falls through to the textarea and
+	// re-filters the menu below.
+	if m.compActive {
+		switch msg.String() {
+		case "up", "ctrl+p":
+			if m.compIdx > 0 {
+				m.compIdx--
+			}
+			return m, nil
+		case "down", "ctrl+n":
+			if m.compIdx < len(m.compMatches)-1 {
+				m.compIdx++
+			}
+			return m, nil
+		case "tab":
+			// Fill in the highlighted command and keep editing so args can follow.
+			m.acceptCompletion()
+			m.relayout()
+			return m, nil
+		case "enter":
+			// Run the highlighted command immediately.
+			m.acceptCompletion()
+			return m.submit()
+		case "esc":
+			m.compActive = false
+			m.relayout()
+			return m, nil
+		}
+	}
+
 	switch msg.String() {
 	case "ctrl+c":
 		if m.running {
@@ -245,8 +286,52 @@ func (m chatModel) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 	m.ta, cmd = m.ta.Update(msg)
+	m.updateCompletion()
 	m.relayout()
 	return m, cmd
+}
+
+// updateCompletion recomputes the autocomplete menu from the current input. The
+// menu is shown only while the operator is typing a bare slash-command name —
+// input that starts with "/" and has no whitespace yet — so it disappears the
+// moment they start typing arguments or anything that is not a command.
+func (m *chatModel) updateCompletion() {
+	val := m.ta.Value()
+	if !strings.HasPrefix(val, "/") || strings.ContainsAny(val, " \t\n") {
+		m.compActive = false
+		m.compMatches = nil
+		m.compIdx = 0
+		return
+	}
+	matches := matchCommands(m.commands(), val[1:])
+	if len(matches) == 0 {
+		m.compActive = false
+		m.compMatches = nil
+		m.compIdx = 0
+		return
+	}
+	m.compMatches = matches
+	m.compActive = true
+	if m.compIdx >= len(matches) {
+		m.compIdx = len(matches) - 1
+	}
+	if m.compIdx < 0 {
+		m.compIdx = 0
+	}
+}
+
+// acceptCompletion replaces the input with the highlighted command, leaving a
+// trailing space so arguments can follow, and closes the menu.
+func (m *chatModel) acceptCompletion() {
+	if !m.compActive || len(m.compMatches) == 0 {
+		return
+	}
+	c := m.compMatches[m.compIdx]
+	m.ta.SetValue("/" + c.name + " ")
+	m.ta.CursorEnd()
+	m.compActive = false
+	m.compMatches = nil
+	m.compIdx = 0
 }
 
 // submit sends the current input: starting a turn when idle, or queueing it when
@@ -500,12 +585,54 @@ func (m chatModel) View() string {
 	if m.running {
 		box = m.styles.InputBoxBusy
 	}
-	return lipgloss.JoinVertical(lipgloss.Left,
-		m.vp.View(),
+	parts := []string{m.vp.View()}
+	if menu := m.completionView(); menu != "" {
+		parts = append(parts, menu)
+	}
+	parts = append(parts,
 		m.statusLine(),
 		box.Width(m.width-2).Render(m.ta.View()),
 		m.footer(),
 	)
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+}
+
+// completionView renders the slash-command autocomplete menu shown just above the
+// input box, with the highlighted row reversed out so the selection is obvious.
+func (m chatModel) completionView() string {
+	if !m.compActive {
+		return ""
+	}
+	items := m.compMatches
+	if len(items) > maxCompletionRows {
+		items = items[:maxCompletionRows]
+	}
+	var b strings.Builder
+	for i, c := range items {
+		name := "/" + c.name
+		if i == m.compIdx {
+			b.WriteString("  " + m.styles.CompletionSel.Render(" "+name+" ") + "  " + m.styles.Hint.Render(c.desc))
+		} else {
+			b.WriteString("  " + m.styles.CompletionName.Render(name) + "  " + m.styles.ToolMeta.Render(c.desc))
+		}
+		if i < len(items)-1 {
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
+}
+
+// completionHeight is the on-screen row count of the autocomplete menu, used to
+// reserve space when sizing the viewport. Zero when the menu is hidden.
+func (m chatModel) completionHeight() int {
+	if !m.compActive {
+		return 0
+	}
+	n := len(m.compMatches)
+	if n > maxCompletionRows {
+		n = maxCompletionRows
+	}
+	return n
 }
 
 // statusLine sits just above the input: the activity spinner while running, the
@@ -671,8 +798,8 @@ func (m chatModel) viewportHeight() int {
 	if m.ready {
 		lines = m.inputLines()
 	}
-	inputBox := lines + 2                       // rounded border top and bottom
-	h := m.height - inputBox - 1 /*status*/ - 1 /*footer*/
+	inputBox := lines + 2 // rounded border top and bottom
+	h := m.height - inputBox - 1 /*status*/ - 1 /*footer*/ - m.completionHeight()
 	if h < 3 {
 		h = 3
 	}

@@ -30,6 +30,11 @@ type Styles struct {
 	Permission    lipgloss.Style
 	PermissionKey lipgloss.Style
 	Mode          lipgloss.Style
+
+	// Completion styles render the slash-command autocomplete menu: the
+	// highlighted row stands out against the dim, unselected rows.
+	CompletionName lipgloss.Style
+	CompletionSel  lipgloss.Style
 }
 
 // DefaultStyles returns the vala color palette.
@@ -59,5 +64,8 @@ func DefaultStyles() Styles {
 		Permission:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")),
 		PermissionKey: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#B197FC")),
 		Mode:          lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#B197FC")),
+
+		CompletionName: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#00B4D8")),
+		CompletionSel:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#0B0B0F")).Background(lipgloss.Color("#7D56F4")),
 	}
 }
