@@ -43,11 +43,12 @@ func (m chatModel) dispatchSlash(input string) (tea.Model, tea.Cmd, bool) {
 	name, args := splitCommand(input[1:])
 	for _, c := range m.commands() {
 		if c.name == name {
+			m.commandPanel = ""
 			model, cmd := c.handler(m, args)
 			return model, cmd, true
 		}
 	}
-	m.append("  " + m.styles.Error.Render("unknown command: /"+name) + "  " + m.styles.Hint.Render("try /help"))
+	m.showCommandPanel("  " + m.styles.Error.Render("unknown command: /"+name) + "  " + m.styles.Hint.Render("try /help"))
 	return m, nil, true
 }
 
@@ -130,7 +131,7 @@ func (m chatModel) cmdHelp(_ string) (tea.Model, tea.Cmd) {
 	for _, c := range m.commands() {
 		b.WriteString("  " + m.styles.ToolCall.Render("/"+c.name) + "  " + m.styles.Hint.Render(c.desc) + "\n")
 	}
-	m.append(strings.TrimRight(b.String(), "\n"))
+	m.showCommandPanel(strings.TrimRight(b.String(), "\n"))
 	return m, nil
 }
 
@@ -142,19 +143,19 @@ func (m chatModel) cmdHelp(_ string) (tea.Model, tea.Cmd) {
 // guided `vala connect` is the better path for first-time key entry.
 func (m chatModel) cmdConnect(args string) (tea.Model, tea.Cmd) {
 	if m.running {
-		m.append("  " + m.styles.Error.Render("busy") + "  " + m.styles.Hint.Render("wait for the current turn before switching providers"))
+		m.showCommandPanel("  " + m.styles.Error.Render("busy") + "  " + m.styles.Hint.Render("wait for the current turn before switching providers"))
 		return m, nil
 	}
 	fields := strings.Fields(args)
 	if len(fields) == 0 {
-		m.append(m.connectList())
+		m.showCommandPanel(m.connectList())
 		return m, nil
 	}
 
 	id := fields[0]
 	info, ok := llm.Builtin(id)
 	if !ok {
-		m.append("  " + m.styles.Error.Render("unknown provider: "+id) + "  " + m.styles.Hint.Render("run /connect to list providers"))
+		m.showCommandPanel("  " + m.styles.Error.Render("unknown provider: "+id) + "  " + m.styles.Hint.Render("run /connect to list providers"))
 		return m, nil
 	}
 
@@ -162,13 +163,13 @@ func (m chatModel) cmdConnect(args string) (tea.Model, tea.Cmd) {
 	// remote provider, or a base URL for a local server.
 	if len(fields) >= 2 {
 		if err := storeInlineCredential(info, fields[1]); err != nil {
-			m.append("  " + m.styles.Error.Render("could not save credential: "+err.Error()))
+			m.showCommandPanel("  " + m.styles.Error.Render("could not save credential: "+err.Error()))
 			return m, nil
 		}
 	}
 
 	if m.repl.Connect == nil {
-		m.append("  " + m.styles.Error.Render("live connect unavailable in this session"))
+		m.showCommandPanel("  " + m.styles.Error.Render("live connect unavailable in this session"))
 		return m, nil
 	}
 
@@ -187,13 +188,13 @@ func (m chatModel) cmdConnect(args string) (tea.Model, tea.Cmd) {
 		} else if info.Local {
 			hint = "point at your server: /connect " + id + " <base-url>"
 		}
-		m.append("  " + m.styles.Error.Render("not connected: "+err.Error()) + "\n  " + m.styles.Hint.Render(hint))
+		m.showCommandPanel("  " + m.styles.Error.Render("not connected: "+err.Error()) + "\n  " + m.styles.Hint.Render(hint))
 		return m, nil
 	}
 
 	m.repl.Agent.SetProvider(provider)
 	m.repl.Model = provider.Provider() + " · " + provider.Model()
-	m.append("  " + m.styles.BannerTag.Render("connected") + "  " +
+	m.showCommandPanel("  " + m.styles.BannerTag.Render("connected") + "  " +
 		m.styles.ToolCall.Render(provider.Provider()) + "  " + m.styles.Hint.Render(provider.Model()))
 	return m, nil
 }
@@ -254,36 +255,32 @@ func storeInlineCredential(info llm.ProviderInfo, secret string) error {
 }
 
 // cmdMode lists the available specializations or switches the active one live.
-// With no arguments it prints every mode and marks the active one; with a mode
-// id it swaps the agent's mode in place — recomputing the system prompt and the
-// exposed tool set — without losing the conversation, mirroring /connect. The
+// With no arguments it shows every mode and marks the active one in the transient
+// command panel; with a mode id it swaps the agent's mode in place — recomputing
+// the system prompt and exposed tool set — without losing the conversation. The
 // switch is blocked mid-turn so the running loop's tool set stays consistent.
 func (m chatModel) cmdMode(args string) (tea.Model, tea.Cmd) {
 	if m.repl.Agent == nil {
-		m.append("  " + m.styles.Error.Render("no agent in this session"))
+		m.showCommandPanel("  " + m.styles.Error.Render("no agent in this session"))
 		return m, nil
 	}
 	name := strings.TrimSpace(args)
 	if name == "" {
-		m.append(m.modeList())
+		m.showCommandPanel(m.modeList())
 		return m, nil
 	}
 	if m.running {
-		m.append("  " + m.styles.Error.Render("busy") + "  " + m.styles.Hint.Render("wait for the current turn before switching modes"))
+		m.showCommandPanel("  " + m.styles.Error.Render("busy") + "  " + m.styles.Hint.Render("wait for the current turn before switching modes"))
 		return m, nil
 	}
 	mm, ok := mode.Get(name)
 	if !ok {
-		m.append("  " + m.styles.Error.Render("unknown mode: "+name) + "  " + m.styles.Hint.Render("valid: "+mode.IDs()))
+		m.showCommandPanel("  " + m.styles.Error.Render("unknown mode: "+name) + "  " + m.styles.Hint.Render("valid: "+mode.IDs()))
 		return m, nil
 	}
 	m.repl.Agent.SetMode(mm)
-	note := mm.Title
-	if len(mm.Skills) > 0 {
-		note += "  ·  skills: " + strings.Join(mm.Skills, ", ")
-	}
-	m.append("  " + m.styles.BannerTag.Render("mode") + "  " +
-		m.styles.ToolCall.Render(mm.ID) + "  " + m.styles.Hint.Render(note))
+	m.commandPanel = ""
+	m.relayout()
 	return m, nil
 }
 
@@ -306,25 +303,30 @@ func (m chatModel) modeList() string {
 
 func (m chatModel) cmdClear(_ string) (tea.Model, tea.Cmd) {
 	if m.running {
-		m.append("  " + m.styles.Error.Render("busy") + "  " + m.styles.Hint.Render("wait for the current turn before clearing"))
+		m.showCommandPanel("  " + m.styles.Error.Render("busy") + "  " + m.styles.Hint.Render("wait for the current turn before clearing"))
 		return m, nil
 	}
 	m.history = nil
 	m.blocks = []string{m.banner()} // keep only the banner
 	m.lastInputTokens = 0
+	m.commandPanel = ""
 	m.refreshViewport()
-	m.append("  " + m.styles.Hint.Render("context cleared"))
 	return m, nil
 }
 
 func (m chatModel) cmdCompact(args string) (tea.Model, tea.Cmd) {
 	if m.running {
-		m.append("  " + m.styles.Error.Render("busy") + "  " + m.styles.Hint.Render("wait for the current turn before compacting"))
+		m.showCommandPanel("  " + m.styles.Error.Render("busy") + "  " + m.styles.Hint.Render("wait for the current turn before compacting"))
 		return m, nil
 	}
 	if len(m.history) == 0 {
-		m.append("  " + m.styles.Hint.Render("nothing to compact yet"))
+		m.showCommandPanel("  " + m.styles.Hint.Render("nothing to compact yet"))
 		return m, nil
 	}
 	return m.startCompaction(args, false)
+}
+
+func (m *chatModel) showCommandPanel(panel string) {
+	m.commandPanel = panel
+	m.relayout()
 }

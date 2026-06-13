@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/brittonhayes/vala/internal/agent"
@@ -93,6 +94,43 @@ func TestDispatchSlashHandling(t *testing.T) {
 	}
 }
 
+func TestHelpUsesTransientCommandPanel(t *testing.T) {
+	m := newTestModel(t)
+	before := len(m.blocks)
+
+	res, _ := m.cmdHelp("")
+	m = res.(chatModel)
+
+	if len(m.blocks) != before {
+		t.Fatalf("/help appended transcript blocks: before=%d after=%d", before, len(m.blocks))
+	}
+	if !strings.Contains(m.commandPanel, "/help") || !strings.Contains(m.commandPanel, "/mode") {
+		t.Fatalf("command panel missing help content: %q", m.commandPanel)
+	}
+}
+
+func TestModeSwitchUpdatesFooterWithoutTranscript(t *testing.T) {
+	m := newTestModel(t)
+	m.repl.Agent = agent.New(nil, tool.NewRegistry(), permission.New(permission.ModeAsk, nil), "", 1, 1, "", agent.Session{Mode: mode.Default()})
+	before := len(m.blocks)
+
+	res, _ := m.cmdMode("detect")
+	m = res.(chatModel)
+
+	if got := m.repl.Agent.Mode().ID; got != "detect" {
+		t.Fatalf("active mode = %q, want detect", got)
+	}
+	if len(m.blocks) != before {
+		t.Fatalf("/mode detect appended transcript blocks: before=%d after=%d", before, len(m.blocks))
+	}
+	if m.commandPanel != "" {
+		t.Fatalf("mode switch left command panel %q", m.commandPanel)
+	}
+	if footer := m.footer(); !strings.Contains(footer, "mode detect") {
+		t.Fatalf("footer %q does not show active mode", footer)
+	}
+}
+
 func TestClearResetsContext(t *testing.T) {
 	m := newTestModel(t)
 	m.history = []llm.Message{llm.UserText("hi")}
@@ -108,9 +146,9 @@ func TestClearResetsContext(t *testing.T) {
 	if m.lastInputTokens != 0 {
 		t.Errorf("lastInputTokens = %d, want 0", m.lastInputTokens)
 	}
-	// The banner survives plus the "context cleared" notice; the prior block is gone.
-	if len(m.blocks) != 2 {
-		t.Fatalf("blocks = %d, want 2 (banner + notice)", len(m.blocks))
+	// The banner survives; command status stays out of transcript scrollback.
+	if len(m.blocks) != 1 {
+		t.Fatalf("blocks = %d, want 1 (banner only)", len(m.blocks))
 	}
 }
 

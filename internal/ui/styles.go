@@ -63,9 +63,9 @@ func DefaultStyles() Styles {
 
 		Permission:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")),
 		PermissionKey: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#B197FC")),
-		Mode:          lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#B197FC")),
+		Mode:          lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")),
 
 		CompletionName: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#00B4D8")),
-		CompletionSel:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#0B0B0F")).Background(lipgloss.Color("#7D56F4")),
+		CompletionSel:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")),
 	}
 }

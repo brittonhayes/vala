@@ -88,9 +88,10 @@ type chatModel struct {
 
 	// Slash-command autocomplete: when the input is a bare "/foo" (no args yet),
 	// compMatches holds the fuzzy-ranked commands and compIdx the highlighted row.
-	compActive  bool
-	compMatches []slashCommand
-	compIdx     int
+	compActive   bool
+	compMatches  []slashCommand
+	compIdx      int
+	commandPanel string // transient slash-command output, kept out of transcript
 }
 
 // maxCompletionRows caps how many command suggestions show at once so the menu
@@ -267,6 +268,11 @@ func (m chatModel) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Quit
 	case "esc":
+		if m.commandPanel != "" {
+			m.commandPanel = ""
+			m.relayout()
+			return m, nil
+		}
 		if m.running {
 			m.interrupt()
 		}
@@ -286,6 +292,7 @@ func (m chatModel) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 	m.ta, cmd = m.ta.Update(msg)
+	m.commandPanel = ""
 	m.updateCompletion()
 	m.relayout()
 	return m, cmd
@@ -332,6 +339,7 @@ func (m *chatModel) acceptCompletion() {
 	m.compActive = false
 	m.compMatches = nil
 	m.compIdx = 0
+	m.commandPanel = ""
 }
 
 // submit sends the current input: starting a turn when idle, or queueing it when
@@ -339,12 +347,17 @@ func (m *chatModel) acceptCompletion() {
 func (m chatModel) submit() (tea.Model, tea.Cmd) {
 	input := strings.TrimSpace(m.ta.Value())
 	if input == "" {
+		if m.commandPanel != "" {
+			m.commandPanel = ""
+			m.relayout()
+		}
 		return m, nil
 	}
 	if input == "exit" || input == "quit" {
 		return m, tea.Quit
 	}
 	m.ta.Reset()
+	m.commandPanel = ""
 	m.relayout()
 
 	// Slash commands are handled by the UI and never recorded as user turns or
@@ -589,6 +602,9 @@ func (m chatModel) View() string {
 	if menu := m.completionView(); menu != "" {
 		parts = append(parts, menu)
 	}
+	if panel := m.commandPanelView(); panel != "" {
+		parts = append(parts, panel)
+	}
 	parts = append(parts,
 		m.statusLine(),
 		box.Width(m.width-2).Render(m.ta.View()),
@@ -622,6 +638,16 @@ func (m chatModel) completionView() string {
 	return b.String()
 }
 
+// commandPanelView renders slash-command output outside the transcript. It is
+// cleared on the next edit or command, so command pickers do not linger in
+// scrollback after the operator has acted on them.
+func (m chatModel) commandPanelView() string {
+	if strings.TrimSpace(m.commandPanel) == "" {
+		return ""
+	}
+	return m.commandPanel
+}
+
 // completionHeight is the on-screen row count of the autocomplete menu, used to
 // reserve space when sizing the viewport. Zero when the menu is hidden.
 func (m chatModel) completionHeight() int {
@@ -633,6 +659,15 @@ func (m chatModel) completionHeight() int {
 		n = maxCompletionRows
 	}
 	return n
+}
+
+// commandPanelHeight is the row count reserved for transient slash-command
+// output above the input.
+func (m chatModel) commandPanelHeight() int {
+	if strings.TrimSpace(m.commandPanel) == "" {
+		return 0
+	}
+	return strings.Count(m.commandPanel, "\n") + 1
 }
 
 // statusLine sits just above the input: the activity spinner while running, the
@@ -666,7 +701,12 @@ func (m chatModel) footer() string {
 	// Only the non-obvious control survives: the permission mode and how to cycle
 	// it. Send/newline/scroll/quit are universal terminal conventions — showing
 	// them is noise.
-	return "  " + m.styles.Mode.Render("⏵⏵ "+m.modeLabel()) + "  " + m.styles.Hint.Render("shift+tab to cycle")
+	parts := []string{m.styles.Mode.Render("⏵⏵ " + m.modeLabel())}
+	if active := m.activeModeLabel(); active != "" {
+		parts = append(parts, m.styles.Hint.Render("mode "+active))
+	}
+	parts = append(parts, m.styles.Hint.Render("shift+tab to cycle"))
+	return "  " + strings.Join(parts, m.styles.Hint.Render("  ·  "))
 }
 
 // modeLabel renders the gate's current permission disposition for the footer.
@@ -679,6 +719,14 @@ func (m chatModel) modeLabel() string {
 	default:
 		return "ask"
 	}
+}
+
+// activeModeLabel renders the current specialization for the footer.
+func (m chatModel) activeModeLabel() string {
+	if m.repl == nil || m.repl.Agent == nil {
+		return ""
+	}
+	return m.repl.Agent.Mode().ID
 }
 
 // banner is the curated session header, rendered as the first transcript block.
@@ -799,7 +847,7 @@ func (m chatModel) viewportHeight() int {
 		lines = m.inputLines()
 	}
 	inputBox := lines + 2 // rounded border top and bottom
-	h := m.height - inputBox - 1 /*status*/ - 1 /*footer*/ - m.completionHeight()
+	h := m.height - inputBox - 1 /*status*/ - 1 /*footer*/ - m.completionHeight() - m.commandPanelHeight()
 	if h < 3 {
 		h = 3
 	}
