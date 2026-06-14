@@ -4,12 +4,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/brittonhayes/vala/internal/agent"
+	"github.com/brittonhayes/vala/internal/mcp"
+	"github.com/brittonhayes/vala/internal/mode"
 	"github.com/brittonhayes/vala/internal/permission"
 	"github.com/brittonhayes/vala/internal/session"
 	"github.com/brittonhayes/vala/internal/tool"
 	"github.com/brittonhayes/vala/internal/tools"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // newTestModel builds a chatModel wired to a real session and gate but no agent,
@@ -297,5 +301,103 @@ func TestWideViewStaysFullWidthWithoutRail(t *testing.T) {
 	}
 	if m.vp.Width != 120 {
 		t.Fatalf("wide viewport width = %d, want full terminal width 120", m.vp.Width)
+	}
+}
+
+func TestComposerIsFlatFullWidthAndGuttered(t *testing.T) {
+	m := newTestModel(t)
+	m.ta.SetValue("hunt cloudtrail")
+
+	view := ansi.Strip(m.View())
+	for _, glyph := range []string{"╭", "╮", "╰", "╯", "─", "│"} {
+		if strings.Contains(view, glyph) {
+			t.Fatalf("composer should not render box borders %q:\n%s", glyph, view)
+		}
+	}
+	if !strings.Contains(view, "\n"+uiGutter+"› hunt cloudtrail") {
+		t.Fatalf("composer prompt should sit on the shared gutter:\n%s", view)
+	}
+	if got, want := lipgloss.Width(uiGutter)+lipgloss.Width(m.ta.Prompt)+m.ta.Width(), m.width; got != want {
+		t.Fatalf("visual composer width = %d, want %d", got, want)
+	}
+	rows := strings.Split(view, "\n")
+	composerRow := -1
+	for i, row := range rows {
+		if strings.Contains(row, uiGutter+"› hunt cloudtrail") {
+			composerRow = i
+			break
+		}
+	}
+	if composerRow < 0 || composerRow+1 >= len(rows) || strings.TrimSpace(rows[composerRow+1]) != "" {
+		t.Fatalf("view should reserve padding between composer and footer:\n%s", view)
+	}
+	if strings.TrimSpace(rows[len(rows)-1]) != "" {
+		t.Fatalf("view should reserve bottom padding:\n%s", view)
+	}
+}
+
+func TestChromeShowsBrandModelDefaultPermissionsAndMode(t *testing.T) {
+	m := newTestModel(t)
+	m.repl.Agent = agent.New(nil, tool.NewRegistry(), permission.New(permission.ModeAsk, nil), "", 1, 1, "", agent.Session{Mode: mode.Default()})
+	m.repl.Model = "anthropic · claude-sonnet-4"
+	m.repl.Evidence = []mcp.EvidenceStatus{{Name: "wiz", Tools: 192}}
+	m.refreshViewport()
+
+	banner := ansi.Strip(m.banner())
+	if strings.Contains(banner, "permissions") || strings.Contains(banner, "mode:") {
+		t.Fatalf("banner should only show brand/model chrome:\n%s", banner)
+	}
+
+	view := ansi.Strip(m.View())
+	for _, want := range []string{"◇ vala", "claude-sonnet-4", "shift+tab to cycle permissions", "mode: hunt"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("chrome missing %q:\n%s", want, view)
+		}
+	}
+	for _, unwanted := range []string{"anthropic", "evidence", "wiz", "192 tools", "ask mode", "auto mode", "permissions: auto", "auto-accept permissions", "▸▸", "← for agents"} {
+		if strings.Contains(view, unwanted) {
+			t.Fatalf("chrome should not contain %q:\n%s", unwanted, view)
+		}
+	}
+}
+
+func TestChromeShowsAutoAcceptPermissionsOnlyInAuto(t *testing.T) {
+	m := newTestModel(t)
+	m.repl.Gate.Mode = permission.ModeAuto
+	m.refreshViewport()
+
+	view := ansi.Strip(m.View())
+	for _, want := range []string{"permissions: auto", "(shift+tab to cycle permissions)"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("auto chrome missing %q:\n%s", want, view)
+		}
+	}
+	for _, unwanted := range []string{"ask mode", "auto mode", "auto-accept permissions", " permissions on", "▸▸", "pauses for permissions", "← for agents"} {
+		if strings.Contains(view, unwanted) {
+			t.Fatalf("auto chrome should not contain %q:\n%s", unwanted, view)
+		}
+	}
+}
+
+func TestShiftTabRefreshesPermissionFooter(t *testing.T) {
+	m := newTestModel(t)
+
+	before := ansi.Strip(m.View())
+	if !strings.Contains(before, "shift+tab to cycle permissions") {
+		t.Fatalf("starting chrome should show permissions shortcut:\n%s", before)
+	}
+	if strings.Contains(before, "permissions: auto") {
+		t.Fatalf("default permissions should not show auto-accept state:\n%s", before)
+	}
+
+	res, _ := m.onKey(tea.KeyMsg{Type: tea.KeyShiftTab})
+	m = res.(chatModel)
+
+	after := ansi.Strip(m.View())
+	if !strings.Contains(after, "permissions: auto") {
+		t.Fatalf("shift+tab should refresh footer to auto permissions:\n%s", after)
+	}
+	if strings.Contains(after, "ask mode") || strings.Contains(after, "auto mode") {
+		t.Fatalf("permissions footer should not use mode wording:\n%s", after)
 	}
 }

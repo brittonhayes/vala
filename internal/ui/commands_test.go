@@ -10,6 +10,7 @@ import (
 	"github.com/brittonhayes/vala/internal/mode"
 	"github.com/brittonhayes/vala/internal/permission"
 	"github.com/brittonhayes/vala/internal/tool"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // fakeProvider is a stand-in llm.Provider for exercising /connect without a
@@ -109,7 +110,7 @@ func TestHelpUsesTransientCommandPanel(t *testing.T) {
 	}
 }
 
-func TestModeSwitchUpdatesFooterWithoutTranscript(t *testing.T) {
+func TestModeSwitchesSpecializationWithoutTranscript(t *testing.T) {
 	m := newTestModel(t)
 	m.repl.Agent = agent.New(nil, tool.NewRegistry(), permission.New(permission.ModeAsk, nil), "", 1, 1, "", agent.Session{Mode: mode.Default()})
 	before := len(m.blocks)
@@ -126,8 +127,53 @@ func TestModeSwitchUpdatesFooterWithoutTranscript(t *testing.T) {
 	if m.commandPanel != "" {
 		t.Fatalf("mode switch left command panel %q", m.commandPanel)
 	}
-	if footer := m.footer(); !strings.Contains(footer, "mode detect") {
-		t.Fatalf("footer %q does not show active mode", footer)
+	if footer := m.footer(); !strings.Contains(footer, "mode: detect") {
+		t.Fatalf("footer should show active mode, got %q", footer)
+	}
+}
+
+func TestModeCommandOpensInteractivePicker(t *testing.T) {
+	m := newTestModel(t)
+	m.repl.Agent = agent.New(nil, tool.NewRegistry(), permission.New(permission.ModeAsk, nil), "", 1, 1, "", agent.Session{Mode: mode.Default()})
+	before := len(m.blocks)
+
+	res, cmd := m.cmdMode("")
+	m = res.(chatModel)
+
+	if cmd == nil {
+		t.Fatal("bare /mode should wait for an interactive picker response")
+	}
+	if m.choice == nil {
+		t.Fatal("bare /mode should open a choice prompt")
+	}
+	if m.commandPanel != "" {
+		t.Fatalf("bare /mode should not render a command panel, got %q", m.commandPanel)
+	}
+	view := m.choiceView()
+	if !strings.Contains(view, "Switch mode") || !strings.Contains(view, "hunt") || !strings.Contains(view, "detect") {
+		t.Fatalf("mode picker missing expected rows:\n%s", view)
+	}
+
+	done := make(chan tea.Msg, 1)
+	go func() { done <- cmd() }()
+
+	res, _ = m.onChoiceKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("detect")})
+	m = res.(chatModel)
+	msg := (<-done).(modeChoiceMsg)
+	res, _ = m.Update(msg)
+	m = res.(chatModel)
+
+	if got := m.repl.Agent.Mode().ID; got != "detect" {
+		t.Fatalf("active mode = %q, want detect", got)
+	}
+	if len(m.blocks) != before {
+		t.Fatalf("/mode picker appended transcript blocks: before=%d after=%d", before, len(m.blocks))
+	}
+	if m.choice != nil {
+		t.Fatal("choice prompt should close after selecting mode")
+	}
+	if footer := m.footer(); !strings.Contains(footer, "mode: detect") {
+		t.Fatalf("footer should show selected mode, got %q", footer)
 	}
 }
 

@@ -58,7 +58,7 @@ func (m model) frame(body string) string {
 
 // header is the wizard's title row, shown atop every screen.
 func (m model) header(title string) string {
-	tag := m.styles.BannerTag.Render("vala")
+	tag := m.styles.Banner.Render("◇ vala")
 	return tag + "  " + m.styles.Banner.Render(title)
 }
 

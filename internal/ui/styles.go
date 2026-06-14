@@ -66,8 +66,8 @@ func DefaultStyles() Styles {
 		Rule:         lipgloss.NewStyle().Foreground(lipgloss.Color("#2A2A30")),
 		Spinner:      lipgloss.NewStyle().Foreground(lipgloss.Color("#7D56F4")),
 		SpinnerLabel: lipgloss.NewStyle().Foreground(lipgloss.Color("#B9B0E6")),
-		InputBox:     lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("#3A3A40")).Padding(0, 1),
-		InputBoxBusy: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("#7D56F4")).Padding(0, 1),
+		InputBox:     lipgloss.NewStyle(),
+		InputBoxBusy: lipgloss.NewStyle(),
 		Queued:       lipgloss.NewStyle().Foreground(lipgloss.Color("#FFB454")),
 		User:         lipgloss.NewStyle().Foreground(lipgloss.Color("#E6E6E6")),
 		CardTitle:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")),
@@ -78,7 +78,7 @@ func DefaultStyles() Styles {
 
 		Permission:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")),
 		PermissionKey: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#B197FC")),
-		Mode:          lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")),
+		Mode:          lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#C58A2A")),
 
 		CompletionName: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#00B4D8")),
 		CompletionSel:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")),

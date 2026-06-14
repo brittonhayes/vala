@@ -236,7 +236,7 @@ func (m chatModel) choiceView() string {
 	width := max(24, m.width-4)
 	var lines []string
 	for _, line := range wrapChoiceText("? "+req.Question, width) {
-		lines = append(lines, "  "+m.styles.ChoiceTitle.Render(line))
+		lines = append(lines, uiGutter+m.styles.ChoiceTitle.Render(line))
 	}
 	for i, opt := range req.Options {
 		cursor := " "
@@ -275,9 +275,9 @@ func (m chatModel) choiceView() string {
 	if req.AllowChat {
 		line := "  tab  Chat instead"
 		if m.choice.onChatRow() {
-			lines = append(lines, "  "+m.styles.ChoiceCursor.Render("› "+line))
+			lines = append(lines, uiGutter+m.styles.ChoiceCursor.Render("› "+line))
 		} else {
-			lines = append(lines, "  "+m.styles.ToolMeta.Render("  "+line))
+			lines = append(lines, uiGutter+m.styles.ToolMeta.Render("  "+line))
 		}
 	}
 	return strings.Join(lines, "\n")
@@ -295,7 +295,7 @@ func (m chatModel) choiceFooter() string {
 		return ""
 	}
 	if m.choice.chatting {
-		return "  " + m.styles.Hint.Render("enter send · esc back · ctrl+c cancel")
+		return uiGutter + m.styles.Hint.Render("enter send · esc back · ctrl+c cancel")
 	}
 	action := "enter select"
 	if m.choice.req.Mode == tools.ChoiceMulti {
@@ -305,7 +305,7 @@ func (m chatModel) choiceFooter() string {
 	if m.choice.req.AllowChat {
 		chat = " · tab chat"
 	}
-	return "  " + m.styles.Hint.Render("↑/↓ move · "+action+chat+" · esc cancel")
+	return uiGutter + m.styles.Hint.Render("↑/↓ move · "+action+chat+" · esc cancel")
 }
 
 func renderChoiceRow(style lipgloss.Style, gutter string, body []string) []string {
@@ -319,7 +319,7 @@ func renderChoiceRow(style lipgloss.Style, gutter string, body []string) []strin
 		if i > 0 {
 			prefix = indent
 		}
-		out = append(out, "  "+style.Render(prefix+line))
+		out = append(out, uiGutter+style.Render(prefix+line))
 	}
 	return out
 }

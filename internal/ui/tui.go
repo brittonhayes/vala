@@ -22,13 +22,17 @@ import (
 // spinnerFrames is a smooth braille cycle that reads as continuous motion.
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
-// maxInputLines caps how tall the input box grows as text wraps before it
+// maxInputLines caps how tall the composer grows as text wraps before it
 // starts to scroll internally, mirroring Claude Code's expanding composer.
 const maxInputLines = 10
 
 const (
-	inputPlaceholder  = "Ask vala to investigate, write a detection, or run a command…"
-	choicePlaceholder = "Type a reply or adjustment for vala…"
+	inputPlaceholder          = "Ask vala to investigate, write a detection, or run a command…"
+	choicePlaceholder         = "Type a reply or adjustment for vala…"
+	brandGlyph                = "◇"
+	uiGutter                  = "  "
+	composerFooterPaddingRows = 1
+	bottomPaddingRows         = 1
 )
 
 // --- messages forwarded from the agent goroutine into the event loop ---
@@ -64,7 +68,7 @@ type permMsg struct {
 }
 
 // chatModel is the Bubble Tea model: a scrolling transcript with an always-on
-// input box at the bottom that accepts new messages even while the agent runs.
+// composer at the bottom that accepts new messages even while the agent runs.
 type chatModel struct {
 	repl   *REPL
 	styles Styles
@@ -115,7 +119,7 @@ func newChatModel(r *REPL) chatModel {
 	ta.CharLimit = 0
 	ta.MaxHeight = maxInputLines
 	ta.SetHeight(1)
-	// Keep the input visually flat; the surrounding box provides the frame.
+	// Keep the composer visually flat; spacing is handled by the shared gutter.
 	ta.FocusedStyle.Base = lipgloss.NewStyle()
 	ta.BlurredStyle.Base = lipgloss.NewStyle()
 	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
@@ -163,7 +167,7 @@ func (m chatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case assistantMsg:
 		m.phase = phaseThinking
 		m.repl.Session.Add(session.Entry{Kind: session.KindAssistant, Content: string(msg)})
-		m.append("\n" + m.md.render(string(msg)))
+		m.append("\n" + indentBlock(m.md.render(string(msg)), uiGutter))
 		return m, nil
 
 	case toolCallMsg:
@@ -173,7 +177,7 @@ func (m chatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// bullet, a muted name, and a clean argument only when there is one worth
 		// showing. Raw JSON blobs are suppressed inline (they live in the
 		// transcript); only the agent's own text earns color.
-		line := "  " + m.styles.ToolMeta.Render("⏺") + " " + m.styles.Result.Render(msg.name)
+		line := uiGutter + m.styles.ToolMeta.Render("⏺") + " " + m.styles.Result.Render(msg.name)
 		if s := oneLine(msg.summary, 64); s != "" {
 			line += "  " + m.styles.Hint.Render(s)
 		}
@@ -189,7 +193,7 @@ func (m chatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case deniedMsg:
-		m.append("  " + m.styles.Denied.Render("✗ denied") + "  " + m.styles.ToolMeta.Render(msg.name))
+		m.append(uiGutter + m.styles.Denied.Render("✗ denied") + "  " + m.styles.ToolMeta.Render(msg.name))
 		return m, nil
 
 	case permMsg:
@@ -215,6 +219,9 @@ func (m chatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case compactDoneMsg:
 		return m.onCompactDone(msg)
 
+	case modeChoiceMsg:
+		return m.onModeChoice(msg.ans)
+
 	case spinner.TickMsg:
 		if !m.running {
 			return m, nil
@@ -224,7 +231,7 @@ func (m chatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// Default: feed the input box (typing, cursor blink, etc.).
+	// Default: feed the composer (typing, cursor blink, etc.).
 	var cmd tea.Cmd
 	m.ta, cmd = m.ta.Update(msg)
 	return m, cmd
@@ -301,12 +308,13 @@ func (m chatModel) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		return m.submit()
 	case "shift+tab":
-		// Toggle the interactivity profile without leaving the session. The footer
+		// Toggle the interactivity profile without leaving the session. The banner
 		// and next model turn both reflect the new profile.
 		m.repl.Gate.CycleMode()
 		if m.repl.Agent != nil {
 			m.repl.Agent.RefreshPrompt()
 		}
+		m.refreshViewport()
 		return m, nil
 	case "pgup", "pgdown", "ctrl+u", "ctrl+d":
 		var cmd tea.Cmd
@@ -396,10 +404,10 @@ func (m chatModel) submit() (tea.Model, tea.Cmd) {
 
 	if m.running {
 		m.queue = append(m.queue, input)
-		m.append(m.styles.User.Render("› "+oneLine(input, 96)) + "  " + m.styles.Queued.Render("(queued)"))
+		m.append(uiGutter + m.styles.User.Render("› "+oneLine(input, 96)) + "  " + m.styles.Queued.Render("(queued)"))
 		return m, nil
 	}
-	m.append(m.styles.User.Render("› " + input))
+	m.append(uiGutter + m.styles.User.Render("› "+input))
 	return m.startTurn(input)
 }
 
@@ -430,9 +438,9 @@ func (m chatModel) onTurnDone(msg turnDoneMsg) (tea.Model, tea.Cmd) {
 	m.history = msg.history
 	if msg.err != nil {
 		if errors.Is(msg.err, context.Canceled) {
-			m.append("  " + m.styles.Denied.Render("⊘ interrupted"))
+			m.append(uiGutter + m.styles.Denied.Render("⊘ interrupted"))
 		} else {
-			m.append("  " + m.styles.Error.Render("error: "+msg.err.Error()))
+			m.append(uiGutter + m.styles.Error.Render("error: "+msg.err.Error()))
 		}
 		return m, nil // do not auto-compact on a failed turn
 	}
@@ -450,7 +458,7 @@ func (m chatModel) onTurnDone(msg turnDoneMsg) (tea.Model, tea.Cmd) {
 	if m.overBudget() {
 		if !m.warnedTightBudget {
 			m.warnedTightBudget = true
-			m.append("  " + m.styles.Denied.Render("⚠ near the context window limit, but the load is mostly fixed overhead "+
+			m.append(uiGutter + m.styles.Denied.Render("⚠ near the context window limit, but the load is mostly fixed overhead "+
 				"(system prompt + connected tools) rather than conversation — compaction can't reclaim it. "+
 				"Switch to a larger-window model with /connect or disable unused MCP tools."))
 		}
@@ -460,7 +468,7 @@ func (m chatModel) onTurnDone(msg turnDoneMsg) (tea.Model, tea.Cmd) {
 	if len(m.queue) > 0 {
 		next := m.queue[0]
 		m.queue = m.queue[1:]
-		m.append(m.styles.User.Render("› " + next))
+		m.append(uiGutter + m.styles.User.Render("› "+next))
 		return m.startTurn(next)
 	}
 	return m, nil
@@ -477,9 +485,9 @@ func (m chatModel) startCompaction(focus string, auto bool) (tea.Model, tea.Cmd)
 	m.phase = "Compacting conversation"
 	m.started = time.Now()
 	if auto {
-		m.append("  " + m.styles.Hint.Render("● auto-compacting context (approaching window limit)…"))
+		m.append(uiGutter + m.styles.Hint.Render("● auto-compacting context (approaching window limit)…"))
 	} else {
-		m.append("  " + m.styles.Hint.Render("● compacting conversation…"))
+		m.append(uiGutter + m.styles.Hint.Render("● compacting conversation…"))
 	}
 
 	p := m.repl.program
@@ -499,9 +507,9 @@ func (m chatModel) onCompactDone(msg compactDoneMsg) (tea.Model, tea.Cmd) {
 	m.cancel = nil
 	if msg.err != nil {
 		if errors.Is(msg.err, context.Canceled) {
-			m.append("  " + m.styles.Denied.Render("⊘ compaction interrupted"))
+			m.append(uiGutter + m.styles.Denied.Render("⊘ compaction interrupted"))
 		} else {
-			m.append("  " + m.styles.Error.Render("compaction failed: "+msg.err.Error()))
+			m.append(uiGutter + m.styles.Error.Render("compaction failed: "+msg.err.Error()))
 		}
 		return m, nil
 	}
@@ -515,11 +523,11 @@ func (m chatModel) onCompactDone(msg compactDoneMsg) (tea.Model, tea.Cmd) {
 	// history (already done via msg.history) and keep the full text in the session
 	// log for the record, but show only a one-line confirmation in the transcript.
 	m.repl.Session.Add(session.Entry{Kind: session.KindAssistant, Content: "[context compacted]\n\n" + msg.summary})
-	m.append("  " + m.styles.Hint.Render(compactNotice(priorMsgs, priorTokens)))
+	m.append(uiGutter + m.styles.Hint.Render(compactNotice(priorMsgs, priorTokens)))
 	if len(m.queue) > 0 {
 		next := m.queue[0]
 		m.queue = m.queue[1:]
-		m.append(m.styles.User.Render("› " + next))
+		m.append(uiGutter + m.styles.User.Render("› "+next))
 		return m.startTurn(next)
 	}
 	return m, nil
@@ -608,7 +616,7 @@ func (m *chatModel) answerPerm(allow bool) {
 	}
 	m.perm.reply <- allow
 	if !allow {
-		m.append("  " + m.styles.Denied.Render("✗ denied") + "  " + m.styles.ToolMeta.Render(m.perm.name))
+		m.append(uiGutter + m.styles.Denied.Render("✗ denied") + "  " + m.styles.ToolMeta.Render(m.perm.name))
 	}
 	m.perm = nil
 	m.ta.Focus()
@@ -636,10 +644,16 @@ func (m chatModel) View() string {
 	}
 	parts = append(parts,
 		m.statusLine(),
-		box.Width(max(1, m.width-2)).Render(m.ta.View()),
+		box.Width(max(1, m.width)).Render(indentBlock(m.ta.View(), uiGutter)),
 	)
+	for range composerFooterPaddingRows {
+		parts = append(parts, "")
+	}
 	if footer := m.footer(); footer != "" {
 		parts = append(parts, footer)
+	}
+	for range bottomPaddingRows {
+		parts = append(parts, "")
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
@@ -658,9 +672,9 @@ func (m chatModel) completionView() string {
 	for i, c := range items {
 		name := "/" + c.name
 		if i == m.compIdx {
-			b.WriteString("  " + m.styles.CompletionSel.Render(" "+name+" ") + "  " + m.styles.Hint.Render(c.desc))
+			b.WriteString(uiGutter + m.styles.CompletionSel.Render(" "+name+" ") + "  " + m.styles.Hint.Render(c.desc))
 		} else {
-			b.WriteString("  " + m.styles.CompletionName.Render(name) + "  " + m.styles.ToolMeta.Render(c.desc))
+			b.WriteString(uiGutter + m.styles.CompletionName.Render(name) + "  " + m.styles.ToolMeta.Render(c.desc))
 		}
 		if i < len(items)-1 {
 			b.WriteString("\n")
@@ -705,7 +719,7 @@ func (m chatModel) commandPanelHeight() int {
 // permission request when one is pending, or a blank spacer when idle.
 func (m chatModel) statusLine() string {
 	if m.choice != nil {
-		return "  " + m.styles.SpinnerLabel.Render("waiting for your choice")
+		return uiGutter + m.styles.SpinnerLabel.Render("waiting for your choice")
 	}
 	if m.perm != nil {
 		return m.permissionLine()
@@ -713,7 +727,7 @@ func (m chatModel) statusLine() string {
 	if !m.running {
 		return ""
 	}
-	line := "  " + m.sp.View() + " " + m.styles.SpinnerLabel.Render(m.phase)
+	line := uiGutter + m.sp.View() + " " + m.styles.SpinnerLabel.Render(m.phase)
 	if e := time.Since(m.started).Round(time.Second); e >= time.Second {
 		line += " " + m.styles.Hint.Render("· "+e.String())
 	}
@@ -727,14 +741,14 @@ func (m chatModel) statusLine() string {
 func (m chatModel) permissionLine() string {
 	width := max(24, m.width-4)
 	lines := []string{
-		"  " + m.styles.Permission.Render("approve") + " " + m.styles.ToolCall.Render(m.perm.name) + m.styles.Permission.Render("?"),
+		uiGutter + m.styles.Permission.Render("approve") + " " + m.styles.ToolCall.Render(m.perm.name) + m.styles.Permission.Render("?"),
 	}
 	if summary := strings.TrimSpace(m.perm.summary); summary != "" {
 		for _, line := range wrapChoiceText(summary, width-2) {
-			lines = append(lines, "    "+m.styles.ToolMeta.Render(line))
+			lines = append(lines, uiGutter+uiGutter+m.styles.ToolMeta.Render(line))
 		}
 	}
-	lines = append(lines, "  "+
+	lines = append(lines, uiGutter+
 		m.styles.PermissionKey.Render("Y")+m.styles.Hint.Render(" approve")+
 		m.styles.Hint.Render(" · ")+
 		m.styles.PermissionKey.Render("N")+m.styles.Hint.Render(" deny"))
@@ -756,41 +770,45 @@ func (m chatModel) footer() string {
 	if m.perm != nil {
 		return ""
 	}
-	// Only the non-obvious control survives: the interactivity profile and how to
-	// toggle it. Send/newline/scroll/quit are universal terminal conventions —
-	// showing them is noise.
-	parts := []string{m.styles.Mode.Render("⏵⏵ " + m.modeLabel())}
+	parts := []string{}
+	if permissions := m.permissionStatusLine(); permissions != "" {
+		parts = append(parts, permissions)
+	}
 	if active := m.activeModeLabel(); active != "" {
-		parts = append(parts, m.styles.Hint.Render("mode "+active))
+		parts = append(parts, m.styles.Hint.Render("mode: "+active))
 	}
-	parts = append(parts, m.styles.Hint.Render("shift+tab to toggle ask/auto"))
-	return "  " + strings.Join(parts, m.styles.Hint.Render("  ·  "))
+	if len(parts) == 0 {
+		return ""
+	}
+	return uiGutter + strings.Join(parts, "   ")
 }
 
-// modeLabel renders the gate's current interactivity profile for the footer.
-func (m chatModel) modeLabel() string {
+// banner is the curated session header, rendered as the first transcript block.
+func (m chatModel) banner() string {
+	return uiGutter + m.styles.Banner.Render(brandGlyph+" vala") + "  " + m.styles.Hint.Render(displayModel(m.repl.Model))
+}
+
+func displayModel(model string) string {
+	parts := strings.Split(model, " · ")
+	return strings.TrimSpace(parts[len(parts)-1])
+}
+
+func (m chatModel) permissionStatusLine() string {
+	if m.repl == nil || m.repl.Gate == nil {
+		return ""
+	}
 	if string(m.repl.Gate.Mode) == "auto" {
-		return "auto"
+		return m.styles.Mode.Render("permissions: auto") + " " +
+			m.styles.Hint.Render("(shift+tab to cycle permissions)")
 	}
-	return "ask"
+	return m.styles.Hint.Render("shift+tab to cycle permissions")
 }
 
-// activeModeLabel renders the current specialization for the footer.
 func (m chatModel) activeModeLabel() string {
 	if m.repl == nil || m.repl.Agent == nil {
 		return ""
 	}
 	return m.repl.Agent.Mode().ID
-}
-
-// banner is the curated session header, rendered as the first transcript block.
-func (m chatModel) banner() string {
-	var b strings.Builder
-	b.WriteString("  " + m.styles.BannerTag.Render("vala") + "  " + m.styles.Hint.Render(m.repl.Model))
-	if line := m.evidenceLine(); line != "" {
-		b.WriteString("\n  " + line)
-	}
-	return b.String()
 }
 
 // evidenceLine renders the connected-evidence summary for the banner, e.g.
@@ -831,9 +849,9 @@ func (m chatModel) renderResult(result tool.Result) string {
 func (m chatModel) renderResultLine(content string, isErr bool) string {
 	trimmed := strings.TrimRight(content, "\n")
 	if isErr {
-		return m.styles.Error.Render("  ⎿ ") + m.styles.ResultErr.Render(oneLine(trimmed, 80))
+		return m.styles.Error.Render(uiGutter+"⎿ ") + m.styles.ResultErr.Render(oneLine(trimmed, 80))
 	}
-	connector := m.styles.ToolMeta.Render("  ⎿ ")
+	connector := m.styles.ToolMeta.Render(uiGutter + "⎿ ")
 	if trimmed == "" {
 		return connector + m.styles.Hint.Render("done")
 	}
@@ -854,7 +872,7 @@ func (m chatModel) renderCard(card tool.Card) string {
 	if title == "" {
 		title = "Tool result"
 	}
-	head := m.styles.ToolMeta.Render("  ⎿ ") + m.styles.CardTitle.Render(title)
+	head := m.styles.ToolMeta.Render(uiGutter+"⎿ ") + m.styles.CardTitle.Render(title)
 	if summary := strings.TrimSpace(card.Summary); summary != "" {
 		head += m.styles.ToolMeta.Render(" · ") + m.styles.CardSummary.Render(oneLine(summary, 72))
 	}
@@ -945,8 +963,8 @@ func (m *chatModel) refreshViewport() {
 // resize recomputes the layout for a new terminal size.
 func (m chatModel) resize(w, h int) (tea.Model, tea.Cmd) {
 	m.width, m.height = w, h
-	m.md = newMarkdownRenderer(w - 4)
-	m.ta.SetWidth(max(1, w-4))
+	m.md = newMarkdownRenderer(w - lipgloss.Width(uiGutter))
+	m.ta.SetWidth(max(1, w-lipgloss.Width(uiGutter)))
 	if !m.ready {
 		m.vp = viewport.New(w, m.viewportHeight())
 		m.ready = true
@@ -967,9 +985,9 @@ func (m *chatModel) relayout() {
 	m.refreshViewport()
 }
 
-// inputLines is the on-screen height of the input box: the number of rows the
+// inputLines is the on-screen height of the composer: the number of rows the
 // current value wraps to, clamped to maxInputLines. It counts soft-wrapped rows
-// (not just hard newlines) so long text expands the box like Claude Code.
+// (not just hard newlines) so long text expands the composer like Claude Code.
 func (m chatModel) inputLines() int {
 	lines := inputRows(m.ta.Value(), m.ta.Width())
 	if lines > maxInputLines {
@@ -979,20 +997,34 @@ func (m chatModel) inputLines() int {
 }
 
 // viewportHeight returns the rows available for the transcript after reserving
-// space for the status line, bordered input box, and footer.
+// space for the status line, flat composer, footer, and bottom breathing room.
 func (m chatModel) viewportHeight() int {
 	lines := 1
 	if m.ready {
 		lines = m.inputLines()
 	}
-	inputBox := lines + 2 // rounded border top and bottom
-	footer := 1
-	if m.perm != nil {
-		footer = 0
-	}
-	h := m.height - inputBox - m.statusHeight() - footer - m.completionHeight() - m.commandPanelHeight() - m.choiceHeight()
+	footer := m.footerHeight()
+	h := m.height - lines - m.statusHeight() - footer - composerFooterPaddingRows - bottomPaddingRows - m.completionHeight() - m.commandPanelHeight() - m.choiceHeight()
 	if h < 3 {
 		h = 3
 	}
 	return h
+}
+
+func (m chatModel) footerHeight() int {
+	if m.footer() == "" {
+		return 0
+	}
+	return 1
+}
+
+func indentBlock(s, indent string) string {
+	if s == "" {
+		return indent
+	}
+	lines := strings.Split(s, "\n")
+	for i := range lines {
+		lines[i] = indent + lines[i]
+	}
+	return strings.Join(lines, "\n")
 }

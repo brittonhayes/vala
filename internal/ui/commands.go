@@ -9,8 +9,13 @@ import (
 	"github.com/brittonhayes/vala/internal/auth"
 	"github.com/brittonhayes/vala/internal/llm"
 	"github.com/brittonhayes/vala/internal/mode"
+	"github.com/brittonhayes/vala/internal/tools"
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+type modeChoiceMsg struct {
+	ans tools.ChoiceResponse
+}
 
 // slashCommand is one operator command invoked with a leading slash. Handlers
 // mutate and return the model like any other Bubble Tea update.
@@ -25,7 +30,7 @@ func (m chatModel) commands() []slashCommand {
 	return []slashCommand{
 		{"help", "list available commands", chatModel.cmdHelp},
 		{"connect", "choose or switch the LLM provider; /connect <provider> [key]", chatModel.cmdConnect},
-		{"mode", "list specializations; /mode <name> switches the active mode live", chatModel.cmdMode},
+		{"mode", "choose a specialization; /mode <name> switches the active mode live", chatModel.cmdMode},
 		{"clear", "clear the conversation and transcript (keep the banner)", chatModel.cmdClear},
 		{"compact", "summarize the conversation to reclaim context; optional focus text", chatModel.cmdCompact},
 	}
@@ -48,7 +53,7 @@ func (m chatModel) dispatchSlash(input string) (tea.Model, tea.Cmd, bool) {
 			return model, cmd, true
 		}
 	}
-	m.showCommandPanel("  " + m.styles.Error.Render("unknown command: /"+name) + "  " + m.styles.Hint.Render("try /help"))
+	m.showCommandPanel(uiGutter + m.styles.Error.Render("unknown command: /"+name) + "  " + m.styles.Hint.Render("try /help"))
 	return m, nil, true
 }
 
@@ -127,9 +132,9 @@ func splitCommand(s string) (name, args string) {
 
 func (m chatModel) cmdHelp(_ string) (tea.Model, tea.Cmd) {
 	var b strings.Builder
-	b.WriteString("  " + m.styles.BannerTag.Render("commands") + "\n")
+	b.WriteString(uiGutter + m.styles.BannerTag.Render("commands") + "\n")
 	for _, c := range m.commands() {
-		b.WriteString("  " + m.styles.ToolCall.Render("/"+c.name) + "  " + m.styles.Hint.Render(c.desc) + "\n")
+		b.WriteString(uiGutter + m.styles.ToolCall.Render("/"+c.name) + "  " + m.styles.Hint.Render(c.desc) + "\n")
 	}
 	m.showCommandPanel(strings.TrimRight(b.String(), "\n"))
 	return m, nil
@@ -143,7 +148,7 @@ func (m chatModel) cmdHelp(_ string) (tea.Model, tea.Cmd) {
 // guided `vala connect` is the better path for first-time key entry.
 func (m chatModel) cmdConnect(args string) (tea.Model, tea.Cmd) {
 	if m.running {
-		m.showCommandPanel("  " + m.styles.Error.Render("busy") + "  " + m.styles.Hint.Render("wait for the current turn before switching providers"))
+		m.showCommandPanel(uiGutter + m.styles.Error.Render("busy") + "  " + m.styles.Hint.Render("wait for the current turn before switching providers"))
 		return m, nil
 	}
 	fields := strings.Fields(args)
@@ -155,7 +160,7 @@ func (m chatModel) cmdConnect(args string) (tea.Model, tea.Cmd) {
 	id := fields[0]
 	info, ok := llm.Builtin(id)
 	if !ok {
-		m.showCommandPanel("  " + m.styles.Error.Render("unknown provider: "+id) + "  " + m.styles.Hint.Render("run /connect to list providers"))
+		m.showCommandPanel(uiGutter + m.styles.Error.Render("unknown provider: "+id) + "  " + m.styles.Hint.Render("run /connect to list providers"))
 		return m, nil
 	}
 
@@ -163,13 +168,13 @@ func (m chatModel) cmdConnect(args string) (tea.Model, tea.Cmd) {
 	// remote provider, or a base URL for a local server.
 	if len(fields) >= 2 {
 		if err := storeInlineCredential(info, fields[1]); err != nil {
-			m.showCommandPanel("  " + m.styles.Error.Render("could not save credential: "+err.Error()))
+			m.showCommandPanel(uiGutter + m.styles.Error.Render("could not save credential: "+err.Error()))
 			return m, nil
 		}
 	}
 
 	if m.repl.Connect == nil {
-		m.showCommandPanel("  " + m.styles.Error.Render("live connect unavailable in this session"))
+		m.showCommandPanel(uiGutter + m.styles.Error.Render("live connect unavailable in this session"))
 		return m, nil
 	}
 
@@ -188,13 +193,13 @@ func (m chatModel) cmdConnect(args string) (tea.Model, tea.Cmd) {
 		} else if info.Local {
 			hint = "point at your server: /connect " + id + " <base-url>"
 		}
-		m.showCommandPanel("  " + m.styles.Error.Render("not connected: "+err.Error()) + "\n  " + m.styles.Hint.Render(hint))
+		m.showCommandPanel(uiGutter + m.styles.Error.Render("not connected: "+err.Error()) + "\n" + uiGutter + m.styles.Hint.Render(hint))
 		return m, nil
 	}
 
 	m.repl.Agent.SetProvider(provider)
 	m.repl.Model = provider.Provider() + " · " + provider.Model()
-	m.showCommandPanel("  " + m.styles.BannerTag.Render("connected") + "  " +
+	m.showCommandPanel(uiGutter + m.styles.BannerTag.Render("connected") + "  " +
 		m.styles.ToolCall.Render(provider.Provider()) + "  " + m.styles.Hint.Render(provider.Model()))
 	return m, nil
 }
@@ -203,7 +208,7 @@ func (m chatModel) cmdConnect(args string) (tea.Model, tea.Cmd) {
 func (m chatModel) connectList() string {
 	store, _ := auth.Load()
 	var b strings.Builder
-	b.WriteString("  " + m.styles.BannerTag.Render("providers") + "\n")
+	b.WriteString(uiGutter + m.styles.BannerTag.Render("providers") + "\n")
 	for _, p := range llm.Providers() {
 		mark := " "
 		if store != nil {
@@ -223,11 +228,12 @@ func (m chatModel) connectList() string {
 		case p.APIKeyEnv != "":
 			hint = "API key or " + p.APIKeyEnv
 		}
-		b.WriteString(fmt.Sprintf("  %s %s  %s\n",
+		b.WriteString(fmt.Sprintf("%s%s %s  %s\n",
+			uiGutter,
 			m.styles.ToolGlyph.Render(mark), m.styles.ToolCall.Render(p.ID), m.styles.Hint.Render(hint)))
 	}
-	b.WriteString("  " + m.styles.Hint.Render("switch: /connect <provider>   ·   add a key: /connect <provider> <api-key>") + "\n")
-	b.WriteString("  " + m.styles.Hint.Render("guided setup with masked key entry: run `vala connect` in your shell"))
+	b.WriteString(uiGutter + m.styles.Hint.Render("switch: /connect <provider>   ·   add a key: /connect <provider> <api-key>") + "\n")
+	b.WriteString(uiGutter + m.styles.Hint.Render("guided setup with masked key entry: run `vala connect` in your shell"))
 	return strings.TrimRight(b.String(), "\n")
 }
 
@@ -254,28 +260,67 @@ func storeInlineCredential(info llm.ProviderInfo, secret string) error {
 	return store.Set(info.ID, cred)
 }
 
-// cmdMode lists the available specializations or switches the active one live.
-// With no arguments it shows every mode and marks the active one in the transient
-// command panel; with a mode id it swaps the agent's mode in place — recomputing
-// the system prompt and exposed tool set — without losing the conversation. The
-// switch is blocked mid-turn so the running loop's tool set stays consistent.
+// cmdMode switches the active specialization live. With no arguments it opens an
+// interactive picker; with a mode id it swaps directly — recomputing the system
+// prompt and exposed tool set — without losing the conversation. The switch is
+// blocked mid-turn so the running loop's tool set stays consistent.
 func (m chatModel) cmdMode(args string) (tea.Model, tea.Cmd) {
 	if m.repl.Agent == nil {
-		m.showCommandPanel("  " + m.styles.Error.Render("no agent in this session"))
+		m.showCommandPanel(uiGutter + m.styles.Error.Render("no agent in this session"))
+		return m, nil
+	}
+	if m.running {
+		m.showCommandPanel(uiGutter + m.styles.Error.Render("busy") + "  " + m.styles.Hint.Render("wait for the current turn before switching modes"))
 		return m, nil
 	}
 	name := strings.TrimSpace(args)
 	if name == "" {
-		m.showCommandPanel(m.modeList())
+		return m.startModeChoice()
+	}
+	return m.switchMode(name)
+}
+
+func (m chatModel) startModeChoice() (tea.Model, tea.Cmd) {
+	req := tools.ChoiceRequest{
+		Question: "Switch mode",
+		Mode:     tools.ChoiceSingle,
+		Options:  modeChoiceOptions(m.repl.Agent.Mode().ID),
+	}
+	reply := make(chan tools.ChoiceResponse, 1)
+	m.choice = newChoicePrompt(choiceMsg{req: req, reply: reply})
+	m.commandPanel = ""
+	m.ta.Blur()
+	m.relayout()
+	return m, func() tea.Msg {
+		return modeChoiceMsg{ans: <-reply}
+	}
+}
+
+func modeChoiceOptions(active string) []tools.ChoiceOption {
+	modes := mode.All()
+	options := make([]tools.ChoiceOption, 0, len(modes))
+	for _, md := range modes {
+		options = append(options, tools.ChoiceOption{
+			ID:      md.ID,
+			Label:   md.Title,
+			Detail:  md.Description,
+			Default: md.ID == active,
+		})
+	}
+	return options
+}
+
+func (m chatModel) onModeChoice(ans tools.ChoiceResponse) (tea.Model, tea.Cmd) {
+	if ans.Canceled || len(ans.Selected) == 0 {
 		return m, nil
 	}
-	if m.running {
-		m.showCommandPanel("  " + m.styles.Error.Render("busy") + "  " + m.styles.Hint.Render("wait for the current turn before switching modes"))
-		return m, nil
-	}
+	return m.switchMode(ans.Selected[0])
+}
+
+func (m chatModel) switchMode(name string) (tea.Model, tea.Cmd) {
 	mm, ok := mode.Get(name)
 	if !ok {
-		m.showCommandPanel("  " + m.styles.Error.Render("unknown mode: "+name) + "  " + m.styles.Hint.Render("valid: "+mode.IDs()))
+		m.showCommandPanel(uiGutter + m.styles.Error.Render("unknown mode: "+name) + "  " + m.styles.Hint.Render("valid: "+mode.IDs()))
 		return m, nil
 	}
 	m.repl.Agent.SetMode(mm)
@@ -284,26 +329,9 @@ func (m chatModel) cmdMode(args string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// modeList renders the mode picker shown by a bare /mode, marking the active one.
-func (m chatModel) modeList() string {
-	active := m.repl.Agent.Mode().ID
-	var b strings.Builder
-	b.WriteString("  " + m.styles.BannerTag.Render("modes") + "\n")
-	for _, md := range mode.All() {
-		mark := " "
-		if md.ID == active {
-			mark = "✓"
-		}
-		b.WriteString(fmt.Sprintf("  %s %s  %s\n",
-			m.styles.ToolGlyph.Render(mark), m.styles.ToolCall.Render(md.ID), m.styles.Hint.Render(md.Description)))
-	}
-	b.WriteString("  " + m.styles.Hint.Render("switch: /mode <name>"))
-	return strings.TrimRight(b.String(), "\n")
-}
-
 func (m chatModel) cmdClear(_ string) (tea.Model, tea.Cmd) {
 	if m.running {
-		m.showCommandPanel("  " + m.styles.Error.Render("busy") + "  " + m.styles.Hint.Render("wait for the current turn before clearing"))
+		m.showCommandPanel(uiGutter + m.styles.Error.Render("busy") + "  " + m.styles.Hint.Render("wait for the current turn before clearing"))
 		return m, nil
 	}
 	m.history = nil
@@ -316,11 +344,11 @@ func (m chatModel) cmdClear(_ string) (tea.Model, tea.Cmd) {
 
 func (m chatModel) cmdCompact(args string) (tea.Model, tea.Cmd) {
 	if m.running {
-		m.showCommandPanel("  " + m.styles.Error.Render("busy") + "  " + m.styles.Hint.Render("wait for the current turn before compacting"))
+		m.showCommandPanel(uiGutter + m.styles.Error.Render("busy") + "  " + m.styles.Hint.Render("wait for the current turn before compacting"))
 		return m, nil
 	}
 	if len(m.history) == 0 {
-		m.showCommandPanel("  " + m.styles.Hint.Render("nothing to compact yet"))
+		m.showCommandPanel(uiGutter + m.styles.Hint.Render("nothing to compact yet"))
 		return m, nil
 	}
 	return m.startCompaction(args, false)
