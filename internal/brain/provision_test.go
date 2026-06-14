@@ -44,6 +44,20 @@ func TestSchemaHasExactlyOneTitle(t *testing.T) {
 	}
 }
 
+func TestSchemaHasNoPropertyRelationNameCollisions(t *testing.T) {
+	for _, s := range Schema() {
+		props := map[string]bool{}
+		for _, p := range s.Props {
+			props[p.Name] = true
+		}
+		for _, r := range s.Relations {
+			if props[r.Name] {
+				t.Errorf("%s defines %q as both a scalar property and relation", s.Name, r.Name)
+			}
+		}
+	}
+}
+
 // TestPropConfigStatusOptions checks the status property configuration carries
 // the seeded options in the Notion shape the create API expects.
 func TestPropConfigStatusOptions(t *testing.T) {

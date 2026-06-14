@@ -395,7 +395,11 @@ func typedValue(typ string, v any) any {
 	case "email":
 		return map[string]any{"email": fmt.Sprint(v)}
 	case "relation":
-		return map[string]any{"relation": idList(v)}
+		ids := idList(v)
+		if len(ids) == 0 {
+			return nil
+		}
+		return map[string]any{"relation": ids}
 	default:
 		return map[string]any{"rich_text": richText(fmt.Sprint(v))}
 	}
@@ -439,14 +443,32 @@ func namedList(v any) []any {
 	return out
 }
 
-// idList renders values as Notion {id} objects (relation).
+// idList renders valid Notion page IDs as Notion {id} objects (relation).
 func idList(v any) []any {
 	ss := asStrings(v)
 	out := make([]any, 0, len(ss))
 	for _, s := range ss {
+		s = strings.TrimSpace(s)
+		if !validRelationID(s) {
+			continue
+		}
 		out = append(out, map[string]any{"id": s})
 	}
 	return out
+}
+
+func validRelationID(s string) bool {
+	compact := strings.ReplaceAll(s, "-", "")
+	if len(compact) != 32 {
+		return false
+	}
+	for _, r := range compact {
+		if (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // Query reads rows back from a Notion data source via `ntn datasources query`.

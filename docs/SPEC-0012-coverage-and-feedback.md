@@ -28,7 +28,8 @@ is the *why* and the *semantics* behind them.
 
 - **Coverage row** — one ATT&CK technique's detection-coverage state:
   `{Technique, Tactic, Status, Fidelity, Detections}` plus `updated_at` and
-  relations to the hunts and detections that touched it.
+  relations to the hunts that touched it. `Detections` is a short summary here;
+  first-class detection rows are linked from hunts and intel.
 - **Coverage status** — `Covered` (a reliable detection fires), `Thin` (partial
   or low-fidelity), or `Uncovered` (no detection).
 - **Fidelity** — `high` | `medium` | `low` | `none`, the reliability of the
@@ -67,8 +68,8 @@ is the *why* and the *semantics* behind them.
 The `coverage` store (`DBCoverage`) is the seventh brain store. Its schema is
 specified in [SPEC-0002](SPEC-0002-brain-and-persistence.md) §4; the title column
 is `technique` (an ATT&CK ID, e.g. `attack.t1562.001`), `status` is a seeded
-status column (`Covered`/`Thin`/`Uncovered`), and it relates to the `hunts` and
-`detections` that touched the technique.
+status column (`Covered`/`Thin`/`Uncovered`), and it relates to the `hunts` that
+touched the technique.
 
 ### Upsert-by-technique
 

@@ -237,7 +237,6 @@ weakest spots. See [SPEC-0012](SPEC-0012-coverage-and-feedback.md).
 | `detections` | rich_text | summary of the detections that cover it |
 | `updated_at` | date | RFC 3339 |
 | `hunts` → hunts | relation | hunts that touched this technique |
-| `detections` → detections | relation | detections covering it |
 
 ### The graph
 

@@ -153,7 +153,7 @@ func Schema() []DBSpec {
 				{"detections", "rich_text"},
 				{"updated_at", "date"},
 			},
-			Relations:     []RelationSpec{{"hunts", DBHunts}, {"detections", DBDetections}},
+			Relations:     []RelationSpec{{"hunts", DBHunts}},
 			StatusOptions: map[string][]string{"status": {CoverageCovered, CoverageThin, CoverageUncovered}},
 		},
 	}

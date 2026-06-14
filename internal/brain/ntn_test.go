@@ -24,7 +24,7 @@ func TestTypedValue(t *testing.T) {
 		{"date", "2026-06-09T00:00:00Z", `"date":{"start":"2026-06-09T00:00:00Z"}`},
 		{"checkbox", true, `"checkbox":true`},
 		{"url", "https://x", `"url":"https://x"`},
-		{"relation", []string{"a", "b"}, `"relation":[{"id":"a"},{"id":"b"}]`},
+		{"relation", []string{"37fb35e6-e67f-81aa-8bf5-dee8ee0b26ca", "37fb35e6e67f81aa8bf5dee8ee0b26cb"}, `"relation":[{"id":"37fb35e6-e67f-81aa-8bf5-dee8ee0b26ca"},{"id":"37fb35e6e67f81aa8bf5dee8ee0b26cb"}]`},
 		{"multi_select", []string{"x"}, `"multi_select":[{"name":"x"}]`},
 		// An unknown type must not drop data — it falls back to rich_text.
 		{"phone_number", "555", `"rich_text"`},
@@ -37,6 +37,15 @@ func TestTypedValue(t *testing.T) {
 		if !strings.Contains(string(b), c.want) {
 			t.Errorf("typedValue(%q, %v) = %s, want substring %q", c.typ, c.in, b, c.want)
 		}
+	}
+}
+
+func TestToPropertiesSkipsFreeTextRelation(t *testing.T) {
+	schema := map[string]string{"detections": "relation"}
+	props := map[string]any{"detections": `Wiz built-in "Anomalous tunneling service execution"`}
+	got := toProperties(schema, props)
+	if _, ok := got["detections"]; ok {
+		t.Fatalf("free-text relation should be omitted, got %#v", got["detections"])
 	}
 }
 
